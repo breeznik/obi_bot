@@ -1,0 +1,93 @@
+# ==============================
+# PYTHON BACKEND .gitignore
+# ==============================
+
+# --- Bytecode ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# --- Virtual Environments ---
+env/
+.venv/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Dependency/Build ---
+*.egg-info/
+.eggs/
+*.egg
+build/
+dist/
+pip-wheel-metadata/
+
+# --- Tooling ---
+poetry.lock
+Pipfile.lock
+
+# --- Runtime Files ---
+*.log
+*.pid
+*.db
+*.sqlite3
+*.bak
+*.tmp
+*.swp
+
+# --- Environment Variables & Secrets ---
+.env
+.env.*
+secrets.json
+config.local.json
+settings.local.py
+
+# --- Test & Coverage ---
+.pytest_cache/
+.tox/
+.nox/
+coverage.*
+htmlcov/
+.cache/
+tests/__pycache__/
+
+# --- Editor Settings ---
+.vscode/
+.idea/
+*.code-workspace
+
+# --- System Files ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Jupyter Notebooks (if any) ---
+.ipynb_checkpoints/
+
+# --- Docker (if used) ---
+*.pid
+docker-compose.override.yml
+.docker/
+.dockerignore
+
+# --- FastAPI / Uvicorn ---
+instance/
+*.reload
+*.sock
+
+# --- Other Temporary Files ---
+*.orig
+*.rej
+*.swo
+*.swn
+
+# Ignore all Pickle files (checkpoints, cache, vectors, etc.)
+*.pckl
+*.pkl
+
+# ==============================
+# End of .gitignore
+# ==============================
