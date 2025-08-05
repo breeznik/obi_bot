@@ -2,7 +2,7 @@
   "dependencies":"./src/workflow",
 
   "graphs": {
-    "default": "src.workflow:langsmith_graph"
+    "default": "src.scripts.workflow:langsmith_graph"
   },
   "python_version": "3.11",
   "requirements": "requirements.txt",

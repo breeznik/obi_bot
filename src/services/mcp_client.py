@@ -41,3 +41,5 @@ async def init_tool_service():
     global mcp_client, tools
     mcp_client = McpClient()  # your SSE or HTTP client
     await mcp_client.init()
+    result = await mcp_client.invoke_tool("schedule" , {'airportid': 'SIA', 'direction': 'A', 'traveldate': '20250608', 'flightId': 'AF2859' , "sessionid":'00081400083250224448591690'})
+    print("printing result - " , result)

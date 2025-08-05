@@ -15,3 +15,8 @@ FAILURE_HANDLER = 'failure_handler'
 SCHEDULE = "schedule"
 RESERVATION = "reservation"
 CONTACT = "contact"
+
+# productype
+ARRIVAL = "ARRIVALONLY"
+DEPARTURE = "DEPARTURELOUNGE"
+BUNDLE = "ARRIVALBUNDLE"

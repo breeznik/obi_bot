@@ -11,7 +11,8 @@ from src.services.mcp_client import McpClient
 from src.controller.chat import Chat
 from contextlib import asynccontextmanager
 from src.services.mcp_client import init_tool_service
-
+import sys
+sys.stdout.reconfigure(encoding='utf-8')  # For Python 3.7+
     
 @asynccontextmanager
 async def lifespan(app: FastAPI):
