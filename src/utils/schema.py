@@ -30,12 +30,12 @@ product_type_schema = {
             },
         "product_type": {
             "type": "string",
-            "enum": ["ARRIVALONLY", "DEPARTURELOUNGE" , "ARRIVALBUNDLE"],
+            "enum": ["ARRIVALONLY", "DEPARTURE" , "ARRIVALBUNDLE"],  # Fixed: DEPARTURE instead of DEPARTURELOUNGE
             "description": "product type selected by user"
         }, 
          "human_input":{
                 "type":"boolean",
-                "description":"if inormation is not satisfied make it true to ask human again , if required info already give make it falase"
+                "description":"if information is not satisfied make it true to ask human again, if required info already given make it false"
         }
     },
     "required": ["product_type","message" , "human_input"]
@@ -211,25 +211,47 @@ def schedule_schema(productType):
 # }
 
 cart_summary_schema = {
-    "title": "cart_summary_schema",
+    "title": "cart_summary_schema", 
     "description": "Schema for summarizing selected cart items and guiding user to next step",
     "type": "object",
     "properties": {
         "message": {
             "type": "string",
-            "description": "AI response to the user summarizing current cart and asking if they want to add more"
+            "description": "AI response to the user summarizing current cart and asking if they want to add more or proceed to checkout"
         },
         "direction": {
-            "type": "string",
+            "type": "string", 
             "enum": ["direction", "end"],
-            "description": "'direction' if user wants to continue adding products, 'end' if they're done"
+            "description": "'direction' if user wants to continue adding products, 'end' if they want to proceed to checkout"
         },
         "human_input": {
             "type": "boolean",
-            "description": "True if AI still needs clarification from user before proceeding. make it false if user have chosen to head to checkout or want to add another product"
+            "description": "True if AI still needs clarification from user before proceeding. False if user has chosen to head to checkout or wants to add another product"
         }
     },
-    "required": ["message", "cart_summary", "direction", "human_input"]
+    "required": ["message", "direction", "human_input"]
+}
+
+# Add validation schema for enhanced input validation
+validation_schema = {
+    "title": "validation_schema",
+    "description": "Schema for validating user input",
+    "type": "object", 
+    "properties": {
+        "valid": {
+            "type": "boolean",
+            "description": "Whether the input is valid"
+        },
+        "data": {
+            "type": "object",
+            "description": "Extracted and formatted data if valid"
+        },
+        "message": {
+            "type": "string", 
+            "description": "Feedback message to user about validation result"
+        }
+    },
+    "required": ["valid", "message"]
 }
 
 contact_schema = {
@@ -402,12 +424,19 @@ def generate_contact_schema(adult_count: int, child_count: int):
     return contact_info_schema
 
 schema_map = {
-    constants.DIRECTION : direction_schema ,
-    constants.PRODUCT_TYPE:  product_type_schema ,
-    constants.INFO_COLLECTOR : info_collector_schema , 
-    constants.SCHEDULE_INFO : schedule_schema , 
+    constants.DIRECTION: direction_schema,
+    constants.PRODUCT_TYPE: product_type_schema,
+    constants.INFO_COLLECTOR: info_collector_schema,
+    constants.SCHEDULE_INFO: schedule_schema,
     constants.FAILURE_HANDLER: failure_schema,
-    constants.CONTACT_INFO: generate_contact_schema , 
+    constants.CONTACT_INFO: generate_contact_schema,
     constants.CART: cart_summary_schema
+}
+
+# Validation schemas for enhanced input validation
+validation_schema_map = {
+    constants.SCHEDULE_INFO: validation_schema,
+    constants.CONTACT_INFO: validation_schema,
+    constants.PRODUCT_TYPE: validation_schema
 }
 

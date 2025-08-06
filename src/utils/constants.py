@@ -16,7 +16,7 @@ SCHEDULE = "schedule"
 RESERVATION = "reservation"
 CONTACT = "contact"
 
-# productype
+# Product type constants - Fixed naming inconsistency
 ARRIVAL = "ARRIVALONLY"
-DEPARTURE = "DEPARTURELOUNGE"
+DEPARTURE = "DEPARTURE"  # Changed from DEPARTURELOUNGE to match instructions
 BUNDLE = "ARRIVALBUNDLE"
