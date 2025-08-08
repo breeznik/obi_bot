@@ -11,7 +11,9 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     content: Any
     checkpoint_id: Optional[str | int] = None
-    status: str = "complete"
+    status: str = "complete",
+    state: Optional[Any] = None  # To include the full content of the response
+    full_data: Optional[Any] = None  # To include the full content of the response
 
 # workflow
 
@@ -40,7 +42,7 @@ class Data(TypedDict):
     
 # state
 class State(TypedDict):
-    messages: Annotated[List , add_messages]
+    messages: List
     current_step:str
     failure_step:bool = False
     executionFlow:List

@@ -62,19 +62,19 @@ async def classifier(state:State):
         print("direction : " , result)
         if result["direction"] == constants.BOOKING:
             return {
-            "current_step": constants.PRODUCT_TYPE,
+            "current_step": constants.PRODUCT_TYPE,            
             }
         else:            
             return {
                 "current_step": END ,
-                "messages": [AIMessage(content= result.get("message" , ""))]
+                "messages": state["messages"]  + [AIMessage(content= result.get("message" , ""))]
             }
             
     except Exception as e:
         print(f"Error in direction: {e}")
         return {
             "current_step": END,
-            "messages": [AIMessage(content="There was some error while processing your request , please retry.")]
+            "messages": state["messages"]  + [AIMessage(content="There was some error while processing your request , please retry.")]
         }
 
 def info_collector(state:State):
@@ -106,7 +106,7 @@ def info_collector(state:State):
             print('Triggering interrupt' , response["message"])
             user_input = interrupt(value=response["message"])
             return {
-                "messages":[HumanMessage(content=user_input)] ,
+                "messages": state["messages"]  + [HumanMessage(content=user_input) , AIMessage(content=response["message"])] ,
                 "executionFlow": state.get("executionFlow", []) + [f"{current_step} retry"],
                 "data": state.get("data") or {}
             }
@@ -142,7 +142,7 @@ def failure_handler(state:State):
     print("response from failure llm : " , response)    
     if response["end"]:
         return {
-            "messages":[AIMessage(content=response["message"])] , 
+            "messages": state["messages"]  + [AIMessage(content=response["message"])] , 
             "current_step":constants.DIRECTION,
             "failure_step": False
         }
@@ -150,13 +150,13 @@ def failure_handler(state:State):
         print('Triggering interrupt' , response["message"])
         user_input = interrupt(value=response["message"])
         return {
-            "messages":[HumanMessage(content=user_input)],
+            "messages":state["messages"]  + [HumanMessage(content=user_input)],
             "executionFlow": state.get("executionFlow", []) + [f"{current_step} {constants.FAILURE_HANDLER} retry"] 
         }
     else:
         return {
             "current_step": failuer_serializer[current_step],
-            "messages": [AIMessage(content=response["message"])] , 
+            "messages": state["messages"]  + [AIMessage(content=response["message"])] , 
             "failure_step": False
         }
        
@@ -395,10 +395,14 @@ async def contact(state: State):
             **data,
             "cart": cartItems
         }
+        
+        # Create a copy of state with empty messages
+        
         return {
             **state,
             "current_step": flow_serializer[current_step],
-            "data": data
+            "data": data,
+            "messages":[]
         }
 
     except Exception as e:
@@ -428,7 +432,7 @@ def show_cart(state: State):
     if not cart:
         print("⚠️ [show_cart] Cart is missing or empty.")
         return {
-            "messages": [AIMessage(content="Your cart is currently empty. Please add items before proceeding.")],
+            "messages": state["messages"] + [AIMessage(content="Your cart is currently empty. Please add items before proceeding.")],
             "current_step": current_step,
         }
 
@@ -456,7 +460,7 @@ def show_cart(state: State):
         print("🛑 [show_cart] Triggering interrupt:", response["message"])
         user_input = interrupt(value=response["message"])
         return {
-            "messages": [HumanMessage(content=user_input)],
+            "messages": state["messages"]  + [HumanMessage(content=user_input) , AIMessage(content=response["message"])],
             "executionFlow": state.get("executionFlow", []) + [f"{current_step} {constants.FAILURE_HANDLER} retry"],
         }
 
@@ -464,18 +468,18 @@ def show_cart(state: State):
     direction = response.get("direction")
     if direction == "end":
         return {
-            "messages": [AIMessage(content=response["message"])],
+            "messages": state["messages"]  + [AIMessage(content=response["message"])],
             "current_step": END,
         }
     elif direction == "direction":
         return {
-            "messages": [AIMessage(content=response["message"])],
-            "current_step": constants.DIRECTION,
+            "messages": state["messages"]  + [AIMessage(content=response["message"])],
+            "current_step": constants.PRODUCT_TYPE,
         }
 
     # Default fallback
     return {
-        "messages": [AIMessage(content="Cart processed, but no clear next step. Please continue.")],
+        "messages": state["messages"]  + [AIMessage(content="Cart processed, but no clear next step. Please continue.")],
         "current_step": current_step,
     }
 

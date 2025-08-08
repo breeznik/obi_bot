@@ -120,7 +120,7 @@ def schedule_schema(productType):
             "direction": {
                 "type": "string",
                 "enum": ["A", "D"],
-                "description": "\"A\" for Arrival, \"D\" for Departure"
+                "description": "\"A\" for Arrival, \"D\" for Departure [don't asK from user, it will be set internally based on product type]"
             },
             "traveldate": {
                 "type": "string",
@@ -221,12 +221,12 @@ cart_summary_schema = {
         },
         "direction": {
             "type": "string",
-            "enum": ["direction", "end"],
-            "description": "'direction' if user wants to continue adding products, 'end' if they're done"
+            "enum": ["direction", "end" , "null"],
+            "description": "deafult - null , if user deciede to add another product then it will be direction , if user want to end the booking then it will be end"
         },
         "human_input": {
             "type": "boolean",
-            "description": "True if AI still needs clarification from user before proceeding. make it false if user have chosen to head to checkout or want to add another product"
+            "description": "true untill either user want to add another product or end the booking , once user decide to add another product or end the booking it will be false"
         }
     },
     "required": ["message", "cart_summary", "direction", "human_input"]

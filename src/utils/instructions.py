@@ -2,16 +2,18 @@ import src.utils.constants as constants
 from langchain_core.prompts import PromptTemplate
 
 product_type_instruction = """
-Ask the user if they want lounge access for arrival, departure, or both. Internally map the response to one of the following product IDs: ARRIVALONLY, DEPARTURE, ARRIVALBUNDLE. Do not show or mention product IDs to the user , if not provide tell user what they need to share.
+Ask the user if they want lounge access for **arrival**, **departure**, or **both**. Internally map the response to one of the following product IDs: ARRIVALONLY, DEPARTURE, ARRIVALBUNDLE. 
+
+from previouse messsages if user have shared their direction then don't ask again.
+
+**Important**: Do not show or mention product IDs to the user.
+
+if the user have provided what direction they are looking for then don't ask again.
 """
 
-direction_instruction = "classify the user message based on their intent if it's for booking lounge or an general querry"
+direction_instruction = "Classify the user message based on their intent.  If it's for booking lounge access or mentioned [arrival ,departure , bundle] then classify as booking if not then a general query, format your response clearly."
 
-schedule_instruction = (
-    "Collect schedule information including: airport ID (e.g., SIA or NMIA), direction (Arrival or Departure), travel date (YYYYMMDD)(if it's not in this formate then convert it your self), and flight ID. if not provide tell user what they need to share "
-    "If this is a bundle, the passenger count will be shared across all items. "
-    "Do not proceed until all the required schedule information is provided. If all details are already available, proceed without confirmation."
-)
+schedule_instruction = "Collect schedule information including airport ID (e.g., SIA or NMIA), direction (Arrival or Departure), travel date (YYYYMMDD), flight ID. present the information in a clear and structured format using markdown."
 
 
 failure_instruction_prompt = PromptTemplate.from_template(
@@ -19,39 +21,72 @@ failure_instruction_prompt = PromptTemplate.from_template(
 
 The step **"{step}"** failed due to an error while calling an external service or API.
 
-**Error Details**: {error}
+## ⚠️ Error Details
+{error}
 
-Your task:
-1. Briefly explain the issue to the user in a polite, non-technical way.
-2. Offer two clear options:
-   - Retry the same step
-   - Exit the booking process
+## Your Options:
+1. **🔄 Retry** - Try the same step again
+2. **❌ Exit** - Cancel the booking process
 
-Keep the tone helpful and professional. Format the response as a short message the AI should send to the user."""
+Please let me know how you'd like to proceed. I'm here to help!
+
+*Keep the tone helpful and professional. Format the response using proper markdown with headers, bullet points, and emphasis.*"""
 )
 
 cart_summary_instruction_prompt = PromptTemplate.from_template(
     """You are a helpful AI assistant guiding a user through a booking process.
+## 🛒 Your Cart Summary
 
-Here is the current cart summary:
 {cart}
 
-Your task:
-1. Summarize the booking details in simple, clear language. Include:
-   - Product type
-   - Number of passengers
-   - Total amount (if available)
-2. Ask the user whether they would like to book another product or proceed to checkout.
+### 📋 Booking Details:
+Please review your selection:
+- **Product Type:** [Product details]
+- **Number of Passengers:** [Count]
+- **Total Amount:** [Amount if available]
 
-Respond in a helpful, polite tone.
+### What's Next?
+Would you like to:
+1. **➕ Add Another Product** - Book additional services
+2. **💳 Proceed to Checkout** - Complete your booking
 
+Please let me know your preference!
+
+*Always format responses using proper markdown with headers, bullet points, emojis, and emphasis for better readability. if the users shares intent to add another product then direct them to "direction" and make the human_input false*
 
 """
 )
 
-contact_instruction = "Collect contact information including first name, last name, email, phone number. if not provide tell user what they need to share"
+contact_instruction = """
+##  Contact Information Required
 
-cart_instruction= "show the current added product into from cart and then ask user if they want to add more product or want to procced for payment"
+ask user for their contact details to proceed with the booking.
+and share what you need from them.
+
+**Required Information:**
+- **First Name**
+- **Last Name** 
+- **Email Address**
+- **Phone Number**
+
+If any information is missing, please use a bulleted list to show what's needed and format your response with proper markdown.
+"""
+
+cart_instruction = """
+## 🛒 Current Cart Status
+
+Show the current products added to the cart using markdown formatting:
+
+### Your Items:
+[Display cart contents here]
+
+### Next Steps:
+Would you like to:
+- **Add more products** to your cart
+- **Proceed to payment** and complete your booking
+
+Please format your response with proper headings, bullet points, and emphasis.
+"""
 
 inst_map = {
 constants.DIRECTION: direction_instruction,
