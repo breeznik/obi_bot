@@ -2,13 +2,8 @@ import src.utils.constants as constants
 from langchain_core.prompts import PromptTemplate
 
 product_type_instruction = """
-Ask the user if they want lounge access for **arrival**, **departure**, or **both**. Internally map the response to one of the following product IDs: ARRIVALONLY, DEPARTURE, ARRIVALBUNDLE. 
-
-from previouse messsages if user have shared their direction then don't ask again.
-
+Ask the user if they want lounge access for **arrival**, **departure**, or **both**. Internally map the response to one of the following product IDs: ARRIVALONLY, DEPARTURELOUNGE, ARRIVALBUNDLE. 
 **Important**: Do not show or mention product IDs to the user.
-
-if the user have provided what direction they are looking for then don't ask again.
 """
 
 direction_instruction = "Classify the user message based on their intent.  If it's for booking lounge access or mentioned [arrival ,departure , bundle] then classify as booking if not then a general query, format your response clearly."
@@ -88,10 +83,13 @@ Would you like to:
 Please format your response with proper headings, bullet points, and emphasis.
 """
 
+summarize_response = "summarize all the user and ai messages and summarize the events into a single system message so that it can be used as minimal context history. note - the the product mentioned in the summary should be marked booked and the next step is cart summary so user can either choose another product example - arrival , departure , or bundle[arrival and departure] or proceed to checkout."
+
 inst_map = {
 constants.DIRECTION: direction_instruction,
 constants.PRODUCT_TYPE: product_type_instruction ,
 constants.SCHEDULE_INFO: schedule_instruction ,
 constants.CONTACT_INFO:contact_instruction , 
-constants.CART: cart_summary_instruction_prompt
+constants.CART: cart_summary_instruction_prompt,
+"summarize": summarize_response
 }

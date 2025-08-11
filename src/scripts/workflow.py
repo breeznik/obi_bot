@@ -6,9 +6,9 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import add_messages 
 from src.utils.states import State
 from langchain_core.messages import HumanMessage , AIMessage , SystemMessage
-from src.utils.instructions import inst_map , failure_instruction_prompt , cart_summary_instruction_prompt
+from src.utils.instructions import inst_map , failure_instruction_prompt , cart_summary_instruction_prompt 
 import src.utils.constants as constants
-from src.utils.schema import schema_map
+from src.utils.schema import schema_map , common_schema_without_human_input
 from src.services.mcp_client import get_mcpInstance , McpClient
 load_dotenv()
 import json
@@ -19,12 +19,12 @@ from typing import Union
 def print_exception_group(exc: BaseException, indent: int = 0):
     prefix = " " * indent
     if hasattr(exc, "exceptions"):  # It's an ExceptionGroup
-        print(f"{prefix}🔍 ExceptionGroup ({exc.__class__.__name__}): {exc}")
+        print(f"{prefix}ExceptionGroup ({exc.__class__.__name__}): {exc}")
         for i, sub_e in enumerate(exc.exceptions):
             print(f"{prefix}--- Sub-exception {i+1} ---")
             print_exception_group(sub_e, indent + 4)
     else:
-        print(f"{prefix}⚠️ {exc.__class__.__name__}: {exc}")
+        print(f"{prefix}{exc.__class__.__name__}: {exc}")
         traceback.print_exception(type(exc), exc, exc.__traceback__, file=sys.stdout)
 
         
@@ -45,6 +45,7 @@ flow_serializer = {
     constants.RESERVATION : constants.CONTACT_INFO , 
     constants.CONTACT_INFO : constants.CONTACT , 
     constants.CONTACT : constants.CART,
+    constants.CART : constants.PAYMENT,
 }
 
 failuer_serializer = {
@@ -54,12 +55,12 @@ failuer_serializer = {
 }
 
 # flow nodes
-async def classifier(state:State):
+async def classifier(state:State , config):
     try: 
         sm = SystemMessage(content = inst_map[constants.DIRECTION])
         structured_llm = llm.with_structured_output(schema_map[constants.DIRECTION])
         result =  structured_llm.invoke([sm] + state["messages"])
-        print("direction : " , result)
+        print(f"Classifier direction: {result}")
         if result["direction"] == constants.BOOKING:
             return {
             "current_step": constants.PRODUCT_TYPE,            
@@ -71,39 +72,34 @@ async def classifier(state:State):
             }
             
     except Exception as e:
-        print(f"Error in direction: {e}")
+        print(f"Error in classifier: {e}")
         return {
             "current_step": END,
             "messages": state["messages"]  + [AIMessage(content="There was some error while processing your request , please retry.")]
         }
 
 def info_collector(state:State):
-    print('info collector triggered' , state)
-
-    sm = ""
     current_step = state.get("current_step" , "")
-    print('before condition' , current_step)
+    print(f"Info collector - step: {current_step}")
+    
+    sm = ""
     if current_step in {constants.PRODUCT_TYPE, constants.SCHEDULE_INFO , constants.CONTACT_INFO}:
         sm = SystemMessage(content=inst_map[current_step])
         schema = schema_map[current_step]
         if(current_step == constants.SCHEDULE_INFO):
             schema = schema_map[current_step](state["data"]["product_type"])
-            print("current schema " , schema)
             structured_llm = llm.with_structured_output(schema)
         elif current_step == constants.CONTACT_INFO:
             schema = schema_map[current_step](adult_count=state["data"]["schedule_info"]["pessanger_count"]["adult"] , child_count=state["data"]["schedule_info"]["pessanger_count"]["children"])
-            print("current schema " , schema)
             structured_llm = llm.with_structured_output(schema)
         else:
             structured_llm = llm.with_structured_output(schema)
         
-        
         response = structured_llm.invoke([sm] + state["messages"])
-        
-        print('response from ai' , response)
+        print(f"Info collector response: {response}")
         
         if response.get("human_input"):
-            print('Triggering interrupt' , response["message"])
+            print(f"Triggering interrupt: {response['message']}")
             user_input = interrupt(value=response["message"])
             return {
                 "messages": state["messages"]  + [HumanMessage(content=user_input) , AIMessage(content=response["message"])] ,
@@ -125,7 +121,7 @@ def info_collector(state:State):
 
 def router_next(state:State):
     current_step = state.get("current_step", "direction")
-    print(f"Routing decision: current_step = {current_step} {state}" )
+    print(f"Router - current step: {current_step}")
     
     if(state.get("failure_step" , False)):
         return constants.FAILURE_HANDLER
@@ -133,13 +129,13 @@ def router_next(state:State):
     return current_step
 
 def failure_handler(state:State):
-    print("failure triggered")
+    print("Failure handler triggered")
     current_step = state["current_step"]
     prompt = failure_instruction_prompt.format(step=state["current_step"] , error="network error")
     sm = SystemMessage(content=prompt)
     structuredllm = llm.with_structured_output(schema_map[constants.FAILURE_HANDLER])
     response = structuredllm.invoke([sm] + state["messages"])
-    print("response from failure llm : " , response)    
+    print(f"Failure handler response: {response}")    
     if response["end"]:
         return {
             "messages": state["messages"]  + [AIMessage(content=response["message"])] , 
@@ -147,7 +143,7 @@ def failure_handler(state:State):
             "failure_step": False
         }
     if response["human_input"]:
-        print('Triggering interrupt' , response["message"])
+        print(f"Triggering interrupt: {response['message']}")
         user_input = interrupt(value=response["message"])
         return {
             "messages":state["messages"]  + [HumanMessage(content=user_input)],
@@ -162,12 +158,13 @@ def failure_handler(state:State):
        
     
 # Application nodes
-async def schedule(state: State):
-    print("🔄 [schedule] Starting schedule step...")
+async def schedule(state: State , config):
+    sessionId = config["metadata"]["thread_id"]
+    print("Starting schedule step")
     currentState = state
     mcp_client: McpClient = await get_mcpInstance()
     current_step = state.get("current_step")
-    print(f"ℹ️ [schedule] Current step: {current_step}")
+    print(f"Current step: {current_step}")
 
     # Ensure 'schedule' dict exists
     if "schedule" not in currentState["data"]:
@@ -177,10 +174,10 @@ async def schedule(state: State):
     data = state.get("data", {})
     isBundle = data.get("product_type") == constants.BUNDLE
     scheduleData = data.get("schedule_info", {})
-    print(f"🧳 [schedule] Is Bundle: {isBundle}")
+    print(f"Is Bundle: {isBundle}")
 
     isSchedule = False
-    session_id = "00009223581026309436128527"
+    session_id = sessionId
 
     def parse_if_str(result):
         if isinstance(result, str):
@@ -188,7 +185,7 @@ async def schedule(state: State):
                 import json
                 return json.loads(result)
             except Exception as e:
-                print(f"❌ [schedule] JSON parse error: {e}")
+                print(f"JSON parse error: {e}")
                 return {}
         return result
 
@@ -197,7 +194,7 @@ async def schedule(state: State):
         return isinstance(result, dict) and result.get("scheduleId")
 
     if not isBundle:
-        print("✈️ [schedule] Processing NON-BUNDLE schedule...")
+        print("Processing non-bundle schedule")
         scheduleObj = {
             "airportid": scheduleData.get("airportid"),
             "direction": scheduleData.get("direction"),
@@ -205,24 +202,24 @@ async def schedule(state: State):
             "flightId": scheduleData.get("flightId"),
             "sessionid": session_id
         }
-        print(f"📦 [schedule] Schedule request payload: {scheduleObj}")
+        print(f"Schedule request payload: {scheduleObj}")
 
         try:
             schedule_result = await mcp_client.invoke_tool("schedule", scheduleObj)
-            print(f"✅ [schedule] Schedule result: {schedule_result}")
+            print(f"Schedule result: {schedule_result}")
             isSchedule = has_schedule_id(schedule_result)
             currentState["data"]["schedule"] = schedule_result            
         except Exception as e:
              traceback.print_exc()  # Logs full traceback to console
              if hasattr(e, 'exceptions'):
                 for i, sub in enumerate(e.exceptions, start=1):
-                    print(f"↪️ Sub-exception {i}: {type(sub).__name__} - {sub}")
+                    print(f"Sub-exception {i}: {type(sub).__name__} - {sub}")
                     if hasattr(sub, '__traceback__'):
                         traceback.print_tb(sub.__traceback__)
 
 
     else:
-        print("🔗 [schedule] Processing BUNDLE schedule (arrival + departure)...")
+        print("Processing bundle schedule (arrival + departure)")
 
         arrivalObj = {
             "airportid": scheduleData.get("arrival", {}).get("airportid"),
@@ -240,27 +237,27 @@ async def schedule(state: State):
             "sessionid": "00081400083250224448591690"  # TODO: extract to config
         }
 
-        print(f"📦 [schedule] Arrival payload: {arrivalObj}")
-        print(f"📦 [schedule] Departure payload: {departureObj}")
+        print(f"Arrival payload: {arrivalObj}")
+        print(f"Departure payload: {departureObj}")
 
         arrival_result, departure_result = None, None
 
         try:
             arrival_result = await mcp_client.invoke_tool("schedule", arrivalObj)
-            print(f"✅ [schedule] Arrival result: {arrival_result}")
+            print(f"Arrival result: {arrival_result}")
         except Exception as e:
-            print(f"❌ [schedule] Error in arrival schedule: {e}")
+            print(f"Error in arrival schedule: {e}")
 
         try:
             departure_result = await mcp_client.invoke_tool("schedule", departureObj)
-            print(f"✅ [schedule] Departure result: {departure_result}")
+            print(f"Departure result: {departure_result}")
         except Exception as e:
-            print(f"❌ [schedule] Error in departure schedule: {e}")
+            print(f"Error in departure schedule: {e}")
 
         if has_schedule_id(arrival_result) and has_schedule_id(departure_result):
             isSchedule = True
         else:
-            print("⚠️ [schedule] Either arrival or departure schedule is missing scheduleId.")
+            print("Either arrival or departure schedule is missing scheduleId")
 
             currentState["data"]["schedule"] = {"arrival":{} , "departure":{}}
         if has_schedule_id(arrival_result):
@@ -269,15 +266,16 @@ async def schedule(state: State):
             currentState["data"]["schedule"]["departure"] = departure_result            
 
     if isSchedule:
-        print("✅ [schedule] Schedule step successful. Proceeding to next step.")
+        print("Schedule step successful - proceeding to next step")
         return {**currentState , "current_step": flow_serializer[current_step]}
 
-    print("❌ [schedule] Schedule step failed.")
+    print("Schedule step failed")
     return { **currentState , "failure_step": True , }
 
 
-async def reservation(state: State):
-    print("🛫 [reservation] Executing reservation step...")
+async def reservation(state: State , config):
+    sessionId = config["metadata"]["thread_id"]
+    print("Executing reservation step")
 
     mcp_client = await get_mcpInstance()
     current_step = state.get("current_step", "")
@@ -288,22 +286,22 @@ async def reservation(state: State):
     schedule_data = data.get("schedule", {})
 
     try:
-        # 🔐 Parse schedule_data if it's a JSON string
+        # Parse schedule_data if it's a JSON string
         if isinstance(schedule_data, str):
             schedule_data = json.loads(schedule_data)
 
-        # 🔐 Parse nested arrival/departure if they're strings
+        # Parse nested arrival/departure if they're strings
         if isinstance(schedule_data.get("arrival"), str):
             schedule_data["arrival"] = json.loads(schedule_data["arrival"])
         if isinstance(schedule_data.get("departure"), str):
             schedule_data["departure"] = json.loads(schedule_data["departure"])
 
-        # 🧍‍♂️ Get passenger counts
+        # Get passenger counts
         passengers = schedule_info.get("pessanger_count", {})
         adult_tickets = passengers.get("adult", 0)
         child_tickets = passengers.get("children", 0)
 
-        # 🧱 Build reservation payload
+        # Build reservation payload
         if product_type == constants.BUNDLE:
             reservation_data = {
                 "adulttickets": adult_tickets,
@@ -313,7 +311,7 @@ async def reservation(state: State):
                     "D": {"scheduleId": schedule_data.get("departure", {}).get("scheduleId", 0)}
                 },
                 "productid": product_type,
-                "sessionid": "00081400083250224448591690"
+                "sessionid": sessionId
             }
         else:
             schedule_id = schedule_data.get("scheduleId", 0)
@@ -325,18 +323,18 @@ async def reservation(state: State):
                     "D": {"scheduleId": schedule_id if product_type == constants.DEPARTURE else 0}
                 },
                 "productid": product_type,
-                "sessionid": "00081400083250224448591690"
+                "sessionid": sessionId
             }
 
-        print(f"📦 [reservation] Payload: {reservation_data}")
+        print(f"Reservation payload: {reservation_data}")
 
-        # 🚀 Call MCP tool
+        # Call MCP tool
         reservation_result = await mcp_client.invoke_tool("reservation", reservation_data)
-        print(f"✅ [reservation] Result: {reservation_result}")
+        print(f"Reservation result: {reservation_result}")
 
         data["reservation"] = json.loads(reservation_result)
         if data["reservation"].get("cartitemid"):
-            # 🔁 Proceed to next step
+            # Proceed to next step
             return {
                 "data": data,
                 "current_step": flow_serializer[current_step],
@@ -347,7 +345,7 @@ async def reservation(state: State):
             "failure_step": True
             }
     except Exception as e:
-        print(f"❌ [reservation] Error during reservation: {e.__class__.__name__}: {e}")
+        print(f"Error during reservation: {e.__class__.__name__}: {e}")
         print_exception_group(e)
 
         return {
@@ -355,10 +353,11 @@ async def reservation(state: State):
             "failure_step": True
         }
         
-async def contact(state: State):
+async def contact(state: State , config):
+    sessionId = config["metadata"]["thread_id"]
     mcp_client = await get_mcpInstance()
     current_step = state["current_step"]
-    print('📞 [contact] Executing contact step...')
+    print("Executing contact step")
 
     # Parse reservation JSON string to dict
     reservation = state["data"]["reservation"]
@@ -373,46 +372,46 @@ async def contact(state: State):
         "lastname": contact_info["lastname"],
         "phone": state["data"]["contact_info"]["contact"]["phone"],  # fallback from main contact
         "title": contact_info["title"],
-        "sessionid":"00081400083250224448591690"
+        "sessionid":sessionId
     }
 
-    print("📦 [contact] Payload:", contact_payload)
+    print(f"Contact payload: {contact_payload}")
 
     try:
+
         contact_response = await mcp_client.invoke_tool("contact", contact_payload)
-        print("✅ [contact] Response:", contact_response)
+        print(f"Contact response: {contact_response}")
         cart = state["data"].get("cart", {})
+        structured_llm = llm.with_structured_output(common_schema_without_human_input)
+        response = structured_llm.invoke([SystemMessage(content=inst_map["summarize"])] + state["messages"])
         cartItems = {
-         **cart,
-        contact_payload["cartitemid"]:{
-            "product":state["data"]["product_type"],
-            "Passengers": state["data"]["reservation"]["ticketsrequested"],
-            "amount":state["data"]["reservation"]["retail"]
-        }
-        }
-        data = state['data']
-        data = {
-            **data,
-            "cart": cartItems
-        }
-        
-        # Create a copy of state with empty messages
-        
+             **cart,
+            contact_payload["cartitemid"]:{
+                "summary":{
+                "product":state["data"]["product_type"],
+                "Passengers": state["data"]["reservation"]["ticketsrequested"],
+                "amount":state["data"]["reservation"]["retail"] , 
+                } , 
+                "intermidiate": {**state["data"]}
+                }}
+
+        data = {"cart": cartItems}
+
         return {
             **state,
             "current_step": flow_serializer[current_step],
             "data": data,
-            "messages":[]
+            "messages":[SystemMessage(content=response["message"])]
         }
 
     except Exception as e:
-        print(f"❌ [contact] Error: {e.__class__.__name__}: {e}")
+        print(f"Error in contact: {e.__class__.__name__}: {e}")
         traceback.print_exc()  # Logs full traceback to console
 
         # For TaskGroup or ExceptionGroup (Python 3.11+), drill into nested errors
         if hasattr(e, 'exceptions'):
             for i, sub in enumerate(e.exceptions, start=1):
-                print(f"↪️ Sub-exception {i}: {type(sub).__name__} - {sub}")
+                print(f"Sub-exception {i}: {type(sub).__name__} - {sub}")
                 if hasattr(sub, '__traceback__'):
                     traceback.print_tb(sub.__traceback__)
 
@@ -423,14 +422,14 @@ async def contact(state: State):
         
 def show_cart(state: State):
     current_step = state.get("current_step", "")
-    print("🛒 [show_cart] Running cart summary...")
+    print("Running cart summary")
 
     # Extract cart safely
     cart = state.get("data", {}).get("cart", {})
 
     # Check if cart is present
     if not cart:
-        print("⚠️ [show_cart] Cart is missing or empty.")
+        print("Cart is missing or empty")
         return {
             "messages": state["messages"] + [AIMessage(content="Your cart is currently empty. Please add items before proceeding.")],
             "current_step": current_step,
@@ -438,9 +437,9 @@ def show_cart(state: State):
 
     # Prepare LLM prompt
     try:
-        prompt = cart_summary_instruction_prompt.format(cart=cart)
+        prompt = cart_summary_instruction_prompt.format(cart = list(cart_item["summary"] for cart_item in cart.values()))
     except Exception as e:
-        print("❌ [show_cart] Failed to format cart summary prompt:", e)
+        print(f"Failed to format cart summary prompt: {e}")
         raise ValueError("Prompt formatting failed due to cart content issue.")
 
     sm = SystemMessage(content=prompt)
@@ -450,14 +449,14 @@ def show_cart(state: State):
     try:
         response = structuredllm.invoke([sm] + state.get("messages", []))
     except Exception as e:
-        print("❌ [show_cart] Error invoking structured LLM:", e)
+        print(f"Error invoking structured LLM: {e}")
         raise
 
-    print("✅ [show_cart] Response from LLM:", response)
+    print(f"Cart summary response: {response}")
 
     # Handle human input interrupt
     if response.get("human_input"):
-        print("🛑 [show_cart] Triggering interrupt:", response["message"])
+        print(f"Triggering interrupt: {response['message']}")
         user_input = interrupt(value=response["message"])
         return {
             "messages": state["messages"]  + [HumanMessage(content=user_input) , AIMessage(content=response["message"])],
@@ -476,6 +475,11 @@ def show_cart(state: State):
             "messages": state["messages"]  + [AIMessage(content=response["message"])],
             "current_step": constants.PRODUCT_TYPE,
         }
+    elif direction == "payment":
+        return {
+            "messages": state["messages"]  + [AIMessage(content=response["message"])],
+            "current_step": constants.PAYMENT,
+        }
 
     # Default fallback
     return {
@@ -483,6 +487,160 @@ def show_cart(state: State):
         "current_step": current_step,
     }
 
+async def payment(state: State , config):
+    mcp_client = await get_mcpInstance()
+    sessionId = config["metadata"]["thread_id"]
+    
+    # Get cart data
+    cart = state.get("data", {}).get("cart", {})
+    
+    if not cart:
+        return {
+            "messages": state["messages"] + [AIMessage(content="No items in cart to process payment.")],
+            "current_step": END,
+        }
+    
+    # Build cart items array for payment API
+    cart_items = []
+    total_amount = 0
+    primary_contact_email = ""
+    cardholder_name = ""
+    
+    for cart_item_id, cart_item in cart.items():
+        intermediate_data = cart_item.get("intermidiate", {})
+        summary_data = cart_item.get("summary", {})
+        
+        # Extract passenger counts
+        passenger_count = intermediate_data.get("schedule_info", {}).get("pessanger_count", {})
+        adult_tickets = passenger_count.get("adult", 0)
+        child_tickets = passenger_count.get("children", 0)
+        
+        # Extract reservation data
+        reservation_data = intermediate_data.get("reservation", {})
+        
+        # Extract contact info
+        contact_info = intermediate_data.get("contact_info", {})
+        primary_contact = contact_info.get("contact", {})
+        
+        # Get primary contact info for payment
+        if not primary_contact_email and primary_contact.get("email"):
+            primary_contact_email = primary_contact.get("email")
+            cardholder_name = f"{primary_contact.get('firstname', '')} {primary_contact.get('lastname', '')}".strip()
+        
+        # Add to total amount
+        item_amount = reservation_data.get("retail", summary_data.get("amount", 0))
+        total_amount += item_amount
+        
+        # Build passengers array from contact info
+        passengers = []
+        
+        # Add adult passengers
+        for adult in contact_info.get("passengerDetails", {}).get("adults", []):
+            passengers.append({
+                "title": adult.get("title", "MR"),
+                "firstname": adult.get("firstname", ""),
+                "lastname": adult.get("lastname", ""),
+                "email": adult.get("email", ""),
+                "dob": adult.get("dob" , "19700101"),
+                "passengertype": "ADULT",
+                "phone": 9057247036
+            })
+        
+        # Add child passengers
+        for child in contact_info.get("passengerDetails", {}).get("children", []):
+            passengers.append({
+                "title": child.get("title", "MISS"),
+                "firstname": child.get("firstname", ""),
+                "lastname": child.get("lastname", ""),
+                "email": child.get("email", ""),
+                "dob": child.get("dob", None)
+            })
+        
+        # Create cart item for payment
+        payment_cart_item = {
+            "adulttickets": adult_tickets,
+            "amount": item_amount,
+            "arrivalscheduleid": reservation_data.get("arrivalscheduleid", 0),
+            "cartitemid": int(cart_item_id),
+            "childtickets": child_tickets,
+            "departurescheduleid": reservation_data.get("departurescheduleid", 0),
+            "groupbooking": "N",
+            "groupid": "NA",
+            "infanttickets": 0,
+            "optional": {
+                "occasioncomment": "",
+                "paddlename": "AI Agent",
+                "specialoccasion": "VACATION"
+            },
+            "passengers": passengers,
+            "primarycontact": {
+                "title": primary_contact.get("title", "MR"),
+                "firstname": primary_contact.get("firstname", ""),
+                "lastname": primary_contact.get("lastname", ""),
+                "email": primary_contact.get("email", ""),
+                "phone": primary_contact.get("phone", "")
+            },
+            "productid": reservation_data.get("productid", summary_data.get("product", "")),
+            "referencenumber": "",
+            "secondarycontact": {
+                "email": "",
+                "firstname": "",
+                "lastname": "",
+                "phone": "",
+                "title": "MR"
+            }
+        }
+        
+        cart_items.append(payment_cart_item)
+    
+    # Prepare payment state with structure expected by payment2 backend function
+    paymentState = {
+        "sessionid": sessionId,
+        "totalAmount": total_amount,
+        "cart": cart_items,
+        "paymentInformation": {
+            "cardholdername": cardholder_name or "AI Agent User",
+            "cardholderemail": primary_contact_email or "nikunjrathi2308@gmail.com",
+            "cardnumber": "4111111111111111",
+            "cardtype": "VISA",
+            "cvv": "123",
+            "expiry": "03/26"
+        }
+    }
+    
+    print(f"Payment state: {paymentState}")
+    
+    try:
+        # Call the payment tool
+        payment_result = await mcp_client.invoke_tool("payment2", {"state":paymentState})
+        print(f"Payment result: {payment_result}")
+        
+        # Parse the result if it's a JSON string
+        if isinstance(payment_result, str):
+            try:
+                payment_result = json.loads(payment_result)
+            except json.JSONDecodeError:
+                print(f"Failed to parse payment result as JSON: {payment_result}")
+                payment_result = {"error": "Invalid response format"}
+        
+        # Check if payment was successful
+        if payment_result and not payment_result.get("error"):
+            return {
+                "messages": state["messages"] + [AIMessage(content=f"🎉 Payment processed successfully! Total amount: ${total_amount}. Your booking confirmation will be sent to {primary_contact_email}.")],
+                "current_step": END,
+            }
+        else:
+            error_msg = payment_result.get("error", "Unknown payment error")
+            return {
+                "messages": state["messages"] + [AIMessage(content=f"❌ Payment failed: {error_msg}. Please try again.")],
+                "current_step": END,
+            }
+    except Exception as e:
+        print(f"Error in payment processing: {e}")
+        return {
+            "messages": state["messages"] + [AIMessage(content="❌ Payment processing failed due to a technical error. Please try again later.")],
+            "current_step": END,
+        }
 
 graph.add_node(constants.DIRECTION , classifier)
 graph.add_node(constants.PRODUCT_TYPE , info_collector)
@@ -493,6 +651,7 @@ graph.add_node(constants.CONTACT , contact)
 graph.add_node(constants.CONTACT_INFO , info_collector)
 graph.add_node(constants.FAILURE_HANDLER , failure_handler)
 graph.add_node(constants.CART , show_cart)
+graph.add_node(constants.PAYMENT , payment)
 
 graph.set_entry_point(constants.DIRECTION)
 
@@ -503,7 +662,8 @@ graph.add_conditional_edges(constants.SCHEDULE , router_next , [constants.RESERV
 graph.add_conditional_edges(constants.RESERVATION , router_next , [constants.CONTACT_INFO , constants.FAILURE_HANDLER])
 graph.add_conditional_edges(constants.CONTACT_INFO , router_next , [constants.CONTACT , constants.CONTACT_INFO ])
 graph.add_conditional_edges(constants.CONTACT , router_next , [constants.FAILURE_HANDLER , END , constants.CART])
-graph.add_conditional_edges(constants.CART , router_next , [constants.DIRECTION , END , constants.CART])
+graph.add_conditional_edges(constants.CART , router_next , [constants.PRODUCT_TYPE , END , constants.CART, constants.PAYMENT])
+graph.add_conditional_edges(constants.PAYMENT , router_next , [END])
 graph.add_conditional_edges(constants.FAILURE_HANDLER , router_next , [END , constants.CONTACT , constants.SCHEDULE , constants.RESERVATION])
 
 

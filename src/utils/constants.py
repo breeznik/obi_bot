@@ -15,6 +15,7 @@ FAILURE_HANDLER = 'failure_handler'
 SCHEDULE = "schedule"
 RESERVATION = "reservation"
 CONTACT = "contact"
+PAYMENT = "payment"
 
 # productype
 ARRIVAL = "ARRIVALONLY"

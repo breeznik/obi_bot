@@ -80,4 +80,42 @@ async def chat(request: ChatRequest):
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="Generation timed out")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Generation error: {e}")
+        import traceback
+        import sys
+        
+        # Capture full traceback
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        traceback_str = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+        
+        # Create detailed error message
+        error_details = {
+            "error_type": exc_type.__name__ if exc_type else "Unknown",
+            "error_message": str(e),
+            "traceback": traceback_str,
+            "checkpoint_id": request.checkpoint_id,
+            "message": request.message
+        }
+        
+        # Log the full error for debugging
+        print(f"=== DETAILED ERROR INFORMATION ===")
+        print(f"Error Type: {error_details['error_type']}")
+        print(f"Error Message: {error_details['error_message']}")
+        print(f"Checkpoint ID: {error_details['checkpoint_id']}")
+        print(f"User Message: {error_details['message']}")
+        print(f"Full Traceback:\n{error_details['traceback']}")
+        print(f"=== END ERROR INFORMATION ===")
+        
+        # Return detailed error to client
+        raise HTTPException(
+            status_code=500, 
+            detail={
+                "error": "Generation failed",
+                "type": error_details['error_type'],
+                "message": error_details['error_message'],
+                "context": {
+                    "checkpoint_id": error_details['checkpoint_id'],
+                    "user_message": error_details['message']
+                },
+                "traceback": error_details['traceback']
+            }
+        )

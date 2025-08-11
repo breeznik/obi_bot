@@ -90,6 +90,18 @@ common_schema = {
         "description": "True if human input is needed"
     },
 }
+common_schema_without_human_input = {
+    "title": "without_human_input",
+    "description": "common schema without human input",
+    "type": "object",
+    "properties": {
+    "message": {
+        "type": "string",
+        "description": "summarize system message for all the chat history and events"
+    }},
+    "required": ["message"]  
+}
+
 
 def schedule_schema(productType):
     print('schedule schema triggered ' , productType)
@@ -221,15 +233,15 @@ cart_summary_schema = {
         },
         "direction": {
             "type": "string",
-            "enum": ["direction", "end" , "null"],
-            "description": "deafult - null , if user deciede to add another product then it will be direction , if user want to end the booking then it will be end"
+            "enum": ["direction", "end" , "null", "payment"],
+            "description": "deafult - null , if user deciede to add another product then it will be direction , if user want to end the booking then it will be end , if user wants to proceed to payment then it will be payment"
         },
         "human_input": {
             "type": "boolean",
             "description": "true untill either user want to add another product or end the booking , once user decide to add another product or end the booking it will be false"
         }
     },
-    "required": ["message", "cart_summary", "direction", "human_input"]
+    "required": ["message", "direction", "human_input"]
 }
 
 contact_schema = {
@@ -408,6 +420,6 @@ schema_map = {
     constants.SCHEDULE_INFO : schedule_schema , 
     constants.FAILURE_HANDLER: failure_schema,
     constants.CONTACT_INFO: generate_contact_schema , 
-    constants.CART: cart_summary_schema
+    constants.CART: cart_summary_schema,
 }
 
