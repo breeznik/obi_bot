@@ -541,19 +541,21 @@ async def payment(state: State , config):
                 "firstname": adult.get("firstname", ""),
                 "lastname": adult.get("lastname", ""),
                 "email": adult.get("email", ""),
-                "dob": adult.get("dob" , "19700101"),
+                "dob": adult.get("dob" , ""),
                 "passengertype": "ADULT",
-                "phone": 9057247036
+                "phone": primary_contact.get("phone", "")
             })
         
         # Add child passengers
         for child in contact_info.get("passengerDetails", {}).get("children", []):
             passengers.append({
-                "title": child.get("title", "MISS"),
+                "title": child.get("title", "MASTER"),
                 "firstname": child.get("firstname", ""),
                 "lastname": child.get("lastname", ""),
-                "email": child.get("email", ""),
-                "dob": child.get("dob", None)
+                "dob": child.get("dob", ""),
+                "passengertype": "CHILD",
+                "phone": primary_contact.get("phone", "")
+                
             })
         
         # Create cart item for payment

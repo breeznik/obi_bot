@@ -314,9 +314,9 @@ def generate_contact_schema(adult_count: int, child_count: int):
                             "description": "Email address"
                         },
                         "dob": {
-                            "type": ["string", "null"],
-                            "description": "Date of birth in YYYY-MM-DD (optional for adults)",
-                            "pattern": "^\d{4}-\d{2}-\d{2}$"
+                            "type": "string",
+                            "description": "Date of birth in YYYYMMDD (required)",
+                            "pattern": "^[0-9]{8}$"
                         }
                     },
                     "required": ["title", "firstname", "lastname", "email"]
@@ -344,8 +344,8 @@ def generate_contact_schema(adult_count: int, child_count: int):
                         },
                         "dob": {
                             "type": "string",
-                            "description": "Date of birth in YYYY-MM-DD (required)",
-                            "pattern": "^\d{4}-\d{2}-\d{2}$"
+                            "description": "Date of birth in YYYYMMDD (required)",
+                            "pattern": "^[0-9]{8}$"
                         }
                     },
                     "required": ["title", "firstname", "lastname", "dob"]
