@@ -1,8 +1,11 @@
 # tools_client.py
 from langchain_mcp_adapters.client import MultiServerMCPClient
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 class McpClient:
-    def __init__(self, server_url: str = "http://localhost:3001/sse", server_key: str = "obi_mcp"):
+    def __init__(self, server_url: str = os.getenv("mcp_server"), server_key: str = "obi_mcp"):
         self.client = MultiServerMCPClient({
             server_key: {
                 "url": server_url,

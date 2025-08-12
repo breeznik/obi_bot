@@ -35,7 +35,7 @@ product_type_schema = {
         }, 
          "human_input":{
                 "type":"boolean",
-                "description":"if inormation is not satisfied make it true to ask human again , if required info already give make it falase"
+                "description":"if information is not satisfied make it true to ask human again , if required info is already given then make it false"
         }
     },
     "required": ["product_type","message" , "human_input"]
@@ -141,7 +141,7 @@ def schedule_schema(productType):
             },
             "flightId": {
                 "type": "string",
-                "description": "Flight ID (e.g., XY123)"
+                "description": "Flight ID"
             },
         },
     }

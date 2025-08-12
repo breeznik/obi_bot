@@ -30,7 +30,7 @@ def print_exception_group(exc: BaseException, indent: int = 0):
         
 memory = MemorySaver()
 
-llm = ChatOpenAI(model="gpt-4o")
+llm = ChatOpenAI(model="o4-mini-2025-04-16")
 
 graph = StateGraph(State)
 
@@ -56,6 +56,7 @@ failuer_serializer = {
 
 # flow nodes
 async def classifier(state:State , config):
+    sessionId = config["metadata"]["thread_id"]
     try: 
         sm = SystemMessage(content = inst_map[constants.DIRECTION])
         structured_llm = llm.with_structured_output(schema_map[constants.DIRECTION])
@@ -63,19 +64,28 @@ async def classifier(state:State , config):
         print(f"Classifier direction: {result}")
         if result["direction"] == constants.BOOKING:
             return {
-            "current_step": constants.PRODUCT_TYPE,            
+            "current_step": constants.PRODUCT_TYPE,
+            "data":{ **state.get("data", {}) ,  "sessionId": sessionId}         
             }
         else:            
             return {
                 "current_step": END ,
-                "messages": state["messages"]  + [AIMessage(content= result.get("message" , ""))]
+                "messages": state["messages"]  + [AIMessage(content= result.get("message" , "") , cleint_events=[
+                {
+                    "type": "client_event",
+                    "event": "redirect_to_summary",
+                    "payload": {"bookingId": "abc123"}
+                },
+                
+            ])] , "data":{ **state.get("data", {}) ,  "sessionId": sessionId}
             }
             
     except Exception as e:
         print(f"Error in classifier: {e}")
         return {
             "current_step": END,
-            "messages": state["messages"]  + [AIMessage(content="There was some error while processing your request , please retry.")]
+            "messages": state["messages"]  + [AIMessage(content="There was some error while processing your request , please retry." )],
+            "data":{ **state.get("data", {}) ,  "sessionId": sessionId}
         }
 
 def info_collector(state:State):
@@ -210,14 +220,13 @@ async def schedule(state: State , config):
             isSchedule = has_schedule_id(schedule_result)
             currentState["data"]["schedule"] = schedule_result            
         except Exception as e:
+             print(f"Error invoking schedule tool: {e}")
              traceback.print_exc()  # Logs full traceback to console
              if hasattr(e, 'exceptions'):
                 for i, sub in enumerate(e.exceptions, start=1):
                     print(f"Sub-exception {i}: {type(sub).__name__} - {sub}")
                     if hasattr(sub, '__traceback__'):
                         traceback.print_tb(sub.__traceback__)
-
-
     else:
         print("Processing bundle schedule (arrival + departure)")
 
@@ -234,7 +243,7 @@ async def schedule(state: State , config):
             "direction": scheduleData.get("departure", {}).get("direction"),
             "traveldate": scheduleData.get("departure", {}).get("traveldate"),
             "flightId": scheduleData.get("departure", {}).get("flightId"),
-            "sessionid": "00081400083250224448591690"  # TODO: extract to config
+            "sessionid": sessionId  # TODO: extract to config
         }
 
         print(f"Arrival payload: {arrivalObj}")
@@ -268,7 +277,7 @@ async def schedule(state: State , config):
     if isSchedule:
         print("Schedule step successful - proceeding to next step")
         return {**currentState , "current_step": flow_serializer[current_step]}
-
+    
     print("Schedule step failed")
     return { **currentState , "failure_step": True , }
 
@@ -396,7 +405,7 @@ async def contact(state: State , config):
                 }}
 
         data = {"cart": cartItems}
-
+        
         return {
             **state,
             "current_step": flow_serializer[current_step],
