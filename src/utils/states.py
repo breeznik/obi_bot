@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional , Any
-from typing import TypedDict, Annotated, Optional, Literal , List
+from typing import TypedDict, Annotated, Optional, Literal , List , Dict
 from langgraph.graph import add_messages 
 
 # request / response
@@ -38,7 +38,13 @@ class Data(TypedDict):
     product_type: str = None
     reservation: Optional[any] = None
     cart:Optional[any] = {}
-    
+    sessionId: Optional[str] = None
+
+
+class ClientEvent(TypedDict):
+    type: Literal["client_event"]
+    event: str
+    payload: Dict[str, Any]
     
 # state
 class State(TypedDict):
@@ -47,4 +53,5 @@ class State(TypedDict):
     failure_step:bool = False
     executionFlow:List
     data:Data = None
+    client_events: List[ClientEvent]
     

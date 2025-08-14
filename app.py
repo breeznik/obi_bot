@@ -49,6 +49,7 @@ async def chat(request: ChatRequest):
             checkpoint_id=request.checkpoint_id,
         )
         content = await asyncio.wait_for(controller.run(), timeout=120)
+        last_msg = content.get("messages", [])[-1]
         
         # Step 1: Check for interrupt
         interrupt = content.get("__interrupt__", [])
@@ -59,7 +60,6 @@ async def chat(request: ChatRequest):
         else:
             messages = content.get("messages", [])
             if messages:
-                last_msg = messages[-1]
                 if hasattr(last_msg, "content"):
                     reply = last_msg.content
                 elif isinstance(last_msg, dict):
@@ -68,9 +68,15 @@ async def chat(request: ChatRequest):
                     reply = str(last_msg)
             else:
                 reply = "No messages found."
-
+                
+        data = {"message": reply, "data": {}}
+        # Check if last_msg has 'client_events' attribute
+        if "client_events" in content:
+            data["data"] = {**data["data"], "client_events": content["client_events"]}
+            
+        print('prinitng data', data)
         return ChatResponse(
-            content=reply,
+            content=data,
             checkpoint_id=request.checkpoint_id,
             status="complete",
             state= content.get("data",{}),

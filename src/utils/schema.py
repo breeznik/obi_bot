@@ -261,11 +261,11 @@ contact_schema = {
             "type": "object",
             "description": "Contact information object",
             "properties": {
-                "firstname": {
+                "firstName": {
                     "type": "string",
                     "description": "First name of the user"
                 },
-                "lastname": {
+                "lastName": {
                     "type": "string",
                     "description": "Last name of the user"
                 },
@@ -279,7 +279,7 @@ contact_schema = {
                     "description": "Phone number with country code (e.g., +919999999999)"
                 },
             },
-            "required": ["firstname", "lastname", "email", "phone"]
+            "required": ["firstName", "lastName", "email", "phone"]
         }
     },
     "required": ["message", "human_input" , "contact_info" ]
@@ -300,11 +300,11 @@ def generate_contact_schema(adult_count: int, child_count: int):
                             "enum": ["MR", "MRS", "Miss", "Master"],
                             "description": "Title of the adult"
                         },
-                        "firstname": {
+                        "firstName": {
                             "type": "string",
                             "description": "First name"
                         },
-                        "lastname": {
+                        "lastName": {
                             "type": "string",
                             "description": "Last name"
                         },
@@ -319,7 +319,7 @@ def generate_contact_schema(adult_count: int, child_count: int):
                             "pattern": "^[0-9]{8}$"
                         }
                     },
-                    "required": ["title", "firstname", "lastname", "email"]
+                    "required": ["title", "firstName", "lastName", "email"]
                 },
                 "minItems": adult_count,
                 "maxItems": adult_count
@@ -334,11 +334,11 @@ def generate_contact_schema(adult_count: int, child_count: int):
                             "enum": ["MR", "MRS", "Miss", "Master"],
                             "description": "Title of the child"
                         },
-                        "firstname": {
+                        "firstName": {
                             "type": "string",
                             "description": "First name"
                         },
-                        "lastname": {
+                        "lastName": {
                             "type": "string",
                             "description": "Last name"
                         },
@@ -348,7 +348,7 @@ def generate_contact_schema(adult_count: int, child_count: int):
                             "pattern": "^[0-9]{8}$"
                         }
                     },
-                    "required": ["title", "firstname", "lastname", "dob"]
+                    "required": ["title", "firstName", "lastName", "dob"]
                 },
                 "minItems": child_count,
                 "maxItems": child_count
@@ -384,11 +384,11 @@ def generate_contact_schema(adult_count: int, child_count: int):
                                 "enum": ["MR", "MRS", "Miss", "Master"],
                                 "description": "Title of contact"
                             },
-                            "firstname": {
+                            "firstName": {
                                 "type": "string",
                                 "description": "First name"
                             },
-                            "lastname": {
+                            "lastName": {
                                 "type": "string",
                                 "description": "Last name"
                             },
@@ -402,7 +402,7 @@ def generate_contact_schema(adult_count: int, child_count: int):
                                 "description": "Phone number with country code (e.g., +919999999999)"
                             }
                         },
-                        "required": ["title", "firstname", "lastname", "email", "phone"]
+                        "required": ["title", "firstName", "lastName", "email", "phone"]
                     }
                 },
                 "required": ["passengerDetails", "contact"]

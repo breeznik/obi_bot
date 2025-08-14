@@ -14,7 +14,7 @@ load_dotenv()
 import json
 import traceback
 import sys
-from typing import Union
+from src.utils.helpers import cart_formulator
 
 def print_exception_group(exc: BaseException, indent: int = 0):
     prefix = " " * indent
@@ -70,7 +70,7 @@ async def classifier(state:State , config):
         else:            
             return {
                 "current_step": END ,
-                "messages": state["messages"]  + [AIMessage(content= result.get("message" , "") , cleint_events=[
+                "messages": state["messages"]  + [AIMessage(content= result.get("message" , "") , client_events=[
                 {
                     "type": "client_event",
                     "event": "redirect_to_summary",
@@ -218,7 +218,7 @@ async def schedule(state: State , config):
             schedule_result = await mcp_client.invoke_tool("schedule", scheduleObj)
             print(f"Schedule result: {schedule_result}")
             isSchedule = has_schedule_id(schedule_result)
-            currentState["data"]["schedule"] = schedule_result            
+            currentState["data"]["schedule"] = json.loads(schedule_result)            
         except Exception as e:
              print(f"Error invoking schedule tool: {e}")
              traceback.print_exc()  # Logs full traceback to console
@@ -280,7 +280,6 @@ async def schedule(state: State , config):
     
     print("Schedule step failed")
     return { **currentState , "failure_step": True , }
-
 
 async def reservation(state: State , config):
     sessionId = config["metadata"]["thread_id"]
@@ -377,8 +376,8 @@ async def contact(state: State , config):
     contact_payload = {
         "cartitemid": reservation["cartitemid"],
         "email": contact_info["email"],
-        "firstname": contact_info["firstname"],
-        "lastname": contact_info["lastname"],
+        "firstname": contact_info["firstName"],
+        "lastname": contact_info["lastName"],
         "phone": state["data"]["contact_info"]["contact"]["phone"],  # fallback from main contact
         "title": contact_info["title"],
         "sessionid":sessionId
@@ -387,7 +386,6 @@ async def contact(state: State , config):
     print(f"Contact payload: {contact_payload}")
 
     try:
-
         contact_response = await mcp_client.invoke_tool("contact", contact_payload)
         print(f"Contact response: {contact_response}")
         cart = state["data"].get("cart", {})
@@ -405,12 +403,17 @@ async def contact(state: State , config):
                 }}
 
         data = {"cart": cartItems}
-        
+        obi_cart = cart_formulator(cartItems)
         return {
             **state,
             "current_step": flow_serializer[current_step],
             "data": data,
-            "messages":[SystemMessage(content=response["message"])]
+            "messages":[SystemMessage(content=response["message"])],
+            "client_events":[{
+                    "type": "client_event",
+                    "event": "add_to_cart",
+                    "payload": {"cart": obi_cart}
+                }]
         }
 
     except Exception as e:
@@ -468,7 +471,11 @@ def show_cart(state: State):
         print(f"Triggering interrupt: {response['message']}")
         user_input = interrupt(value=response["message"])
         return {
-            "messages": state["messages"]  + [HumanMessage(content=user_input) , AIMessage(content=response["message"])],
+            "messages": state["messages"]  + [HumanMessage(content=user_input) , AIMessage(content=response["message"] , client_events=[{
+                    "type": "client_event",
+                    "event": "add_to_cart",
+                    "payload": {"cart": cart_formulator(state["data"]["cart"])}
+                }])],
             "executionFlow": state.get("executionFlow", []) + [f"{current_step} {constants.FAILURE_HANDLER} retry"],
         }
 
@@ -476,17 +483,17 @@ def show_cart(state: State):
     direction = response.get("direction")
     if direction == "end":
         return {
-            "messages": state["messages"]  + [AIMessage(content=response["message"])],
+            "messages": state["messages"]  + [AIMessage(content=response["message"] )],
             "current_step": END,
         }
     elif direction == "direction":
         return {
-            "messages": state["messages"]  + [AIMessage(content=response["message"])],
+            "messages": state["messages"]  + [AIMessage(content=response["message"] )],
             "current_step": constants.PRODUCT_TYPE,
         }
     elif direction == "payment":
         return {
-            "messages": state["messages"]  + [AIMessage(content=response["message"])],
+            "messages": state["messages"]  + [AIMessage(content=response["message"] )],
             "current_step": constants.PAYMENT,
         }
 
