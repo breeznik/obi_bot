@@ -30,7 +30,7 @@ def print_exception_group(exc: BaseException, indent: int = 0):
         
 memory = MemorySaver()
 
-llm = ChatOpenAI(model="o4-mini-2025-04-16")
+llm = ChatOpenAI(model="gpt-4o")
 
 graph = StateGraph(State)
 
@@ -63,9 +63,11 @@ async def classifier(state:State , config):
         result =  structured_llm.invoke([sm] + state["messages"])
         print(f"Classifier direction: {result}")
         if result["direction"] == constants.BOOKING:
+            # Store extracted data from user's initial message
+            extracted_data = result.get("extracted_data", {})
             return {
             "current_step": constants.PRODUCT_TYPE,
-            "data":{ **state.get("data", {}) ,  "sessionId": sessionId}         
+            "data":{ **state.get("data", {}) ,  "sessionId": sessionId, "extracted_data": extracted_data}         
             }
         else:            
             return {
@@ -371,15 +373,15 @@ async def contact(state: State , config):
     reservation = state["data"]["reservation"]
 
     # Access first adult's contact info
-    contact_info = state["data"]["contact_info"]["passengerDetails"]["adults"][0]
+    contact_info = state["data"]["contact_info"]["contact"]
     
     contact_payload = {
         "cartitemid": reservation["cartitemid"],
         "email": contact_info["email"],
         "firstname": contact_info["firstName"],
         "lastname": contact_info["lastName"],
-        "phone": state["data"]["contact_info"]["contact"]["phone"],  # fallback from main contact
-        "title": contact_info["title"],
+        "phone": contact_info["phone"],  # fallback from main contact
+        "title": contact_info.get("title" , "MR"),
         "sessionid":sessionId
     }
 
@@ -389,26 +391,34 @@ async def contact(state: State , config):
         contact_response = await mcp_client.invoke_tool("contact", contact_payload)
         print(f"Contact response: {contact_response}")
         cart = state["data"].get("cart", {})
-        structured_llm = llm.with_structured_output(common_schema_without_human_input)
-        response = structured_llm.invoke([SystemMessage(content=inst_map["summarize"])] + state["messages"])
+        # structured_llm = llm.with_structured_output(common_schema_without_human_input)
+        # response = structured_llm.invoke([SystemMessage(content=inst_map["summarize"])] + state["messages"])
+        intermidateData = {
+            "contact_info": state["data"].get("contact_info", {}),
+            "contact": state["data"].get("contact", {}),
+            "sessionId": state["data"].get("sessionId", sessionId),
+            "reservation": state["data"].get("reservation", {}),
+            "product_type": state["data"].get("product_type", ""),
+            "schedule_info": state["data"].get("schedule_info", {}),
+            "schedule": state["data"].get("schedule", {}),
+        }
         cartItems = {
-             **cart,
             contact_payload["cartitemid"]:{
                 "summary":{
                 "product":state["data"]["product_type"],
                 "Passengers": state["data"]["reservation"]["ticketsrequested"],
                 "amount":state["data"]["reservation"]["retail"] , 
                 } , 
-                "intermidiate": {**state["data"]}
-                }}
-
-        data = {"cart": cartItems}
+                "intermidiate": intermidateData
+            }}
+        
+        data = {"cart": {**state["data"].get("cart", {}) , **cartItems}}
         obi_cart = cart_formulator(cartItems)
         return {
             **state,
             "current_step": flow_serializer[current_step],
             "data": data,
-            "messages":[SystemMessage(content=response["message"])],
+            "messages":[],
             "client_events":[{
                     "type": "client_event",
                     "event": "add_to_cart",
@@ -471,11 +481,11 @@ def show_cart(state: State):
         print(f"Triggering interrupt: {response['message']}")
         user_input = interrupt(value=response["message"])
         return {
-            "messages": state["messages"]  + [HumanMessage(content=user_input) , AIMessage(content=response["message"] , client_events=[{
+            "messages": state["messages"]  + [ AIMessage(content=response["message"] , client_events=[{
                     "type": "client_event",
                     "event": "add_to_cart",
                     "payload": {"cart": cart_formulator(state["data"]["cart"])}
-                }])],
+                }]) , HumanMessage(content=user_input) ],
             "executionFlow": state.get("executionFlow", []) + [f"{current_step} {constants.FAILURE_HANDLER} retry"],
         }
 
@@ -673,16 +683,16 @@ graph.add_node(constants.PAYMENT , payment)
 
 graph.set_entry_point(constants.DIRECTION)
 
-graph.add_conditional_edges(constants.DIRECTION , router_next , [constants.PRODUCT_TYPE ,END])
-graph.add_conditional_edges(constants.PRODUCT_TYPE , router_next , [constants.SCHEDULE_INFO , constants.PRODUCT_TYPE , END])
-graph.add_conditional_edges(constants.SCHEDULE_INFO , router_next , [constants.SCHEDULE , constants.SCHEDULE_INFO , END ])
+graph.add_conditional_edges(constants.DIRECTION , router_next , [constants.PRODUCT_TYPE , constants.FAILURE_HANDLER, END])
+graph.add_conditional_edges(constants.PRODUCT_TYPE , router_next , [constants.SCHEDULE_INFO , constants.PRODUCT_TYPE , constants.FAILURE_HANDLER, END])
+graph.add_conditional_edges(constants.SCHEDULE_INFO , router_next , [constants.SCHEDULE , constants.SCHEDULE_INFO , constants.FAILURE_HANDLER, END ])
 graph.add_conditional_edges(constants.SCHEDULE , router_next , [constants.RESERVATION , constants.FAILURE_HANDLER])
 graph.add_conditional_edges(constants.RESERVATION , router_next , [constants.CONTACT_INFO , constants.FAILURE_HANDLER])
-graph.add_conditional_edges(constants.CONTACT_INFO , router_next , [constants.CONTACT , constants.CONTACT_INFO ])
+graph.add_conditional_edges(constants.CONTACT_INFO , router_next , [constants.CONTACT , constants.CONTACT_INFO , constants.FAILURE_HANDLER])
 graph.add_conditional_edges(constants.CONTACT , router_next , [constants.FAILURE_HANDLER , END , constants.CART])
-graph.add_conditional_edges(constants.CART , router_next , [constants.PRODUCT_TYPE , END , constants.CART, constants.PAYMENT])
-graph.add_conditional_edges(constants.PAYMENT , router_next , [END])
-graph.add_conditional_edges(constants.FAILURE_HANDLER , router_next , [END , constants.CONTACT , constants.SCHEDULE , constants.RESERVATION])
+graph.add_conditional_edges(constants.CART , router_next , [constants.PRODUCT_TYPE , END , constants.CART, constants.PAYMENT, constants.FAILURE_HANDLER])
+graph.add_conditional_edges(constants.PAYMENT , router_next , [END, constants.FAILURE_HANDLER])
+graph.add_conditional_edges(constants.FAILURE_HANDLER , router_next , [END , constants.CONTACT , constants.SCHEDULE , constants.RESERVATION, constants.SCHEDULE_INFO, constants.CONTACT_INFO])
 
 
 compiled_graph = graph.compile(memory)

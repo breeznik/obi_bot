@@ -1,95 +1,224 @@
 import src.utils.constants as constants
 from langchain_core.prompts import PromptTemplate
 
+# CONCISE SCRIPT-BASED INSTRUCTIONS
+
+# Intent Classification
+direction_instruction = """
+Classify user intent based on current AND previous messages - check all conversation history for context:
+- BOOKING: mentions "lounge", "arrival", "departure", "both", "book", "reserve", "access"
+- GENERAL: everything else
+
+IMPORTANT: If user already indicated booking intent in any previous message, treat as BOOKING even if current message seems general.
+
+If BOOKING: Set direction="booking", no message.
+If GENERAL: Set direction="end" + friendly markdown response like:
+```
+Hello!
+
+Welcome to our Airport Lounge Booking Service.
+
+How can I assist you today?
+- Book arrival lounge access
+- Book departure lounge access  
+- Book combined arrival & departure package
+- Answer questions about our services
+
+Feel free to ask me anything!
+```
+"""
+
+# Product Selection  
 product_type_instruction = """
-Ask the user if they want lounge access for **arrival**, **departure**, or **both**. Internally map the response to one of the following product IDs: ARRIVALONLY, DEPARTURELOUNGE, ARRIVALBUNDLE. 
-**Important**: Do not show or mention product IDs to the user.
+Script: Determine lounge type from user message or ask if unclear.
+
+IMPORTANT: Always check previous messages first - if the user already specified lounge type, airport, or booking details in any previous message, use that information directly without asking again.
+
+FIRST: Check current AND previous messages for lounge type or airport:
+- "arrival lounge", "arrival" → ARRIVALONLY
+- "departure lounge", "departure" → DEPARTURELOUNGE  
+- "both", "arrival and departure" → ARRIVALBUNDLE
+- Airport mentions: "SIA", "Club Mobay", "Sangster" → usually arrival
+- Airport mentions: "NMIA", "Club Kingston", "Norman Manley" → usually arrival
+
+If lounge type is clear from current or previous messages, confirm and proceed:
+```markdown
+## Lounge Access Booking
+
+Perfect! I can see you want **[lounge type]** access. Let me help you book that right away!
+```
+
+ONLY if unclear or not specified in any previous message, present options:
+```markdown
+## Lounge Access Booking
+
+Great! I'd love to help you book lounge access.
+
+**What type of lounge experience are you looking for?**
+
+1. **Arrival Lounge** - Relax and refresh when you land
+2. **Departure Lounge** - Unwind before your flight takes off  
+3. **Both** - Complete arrival and departure experience
+
+Which option sounds good to you?
+```
+
+Map: arrival→ARRIVALONLY, departure→DEPARTURELOUNGE, both→ARRIVALBUNDLE
+human_input=false when type is clear from any message, true only if unclear and need user choice.
 """
 
-direction_instruction = "Classify the user message based on their intent.  If it's for booking lounge access or mentioned [arrival ,departure , bundle] then classify as booking if not then a general query, format your response clearly."
+# Schedule Collection
+schedule_instruction = """
+Script: Extract and confirm flight details from current and previous messages. Only ask for information that hasn't been provided before.
 
-schedule_instruction = "Collect schedule information including airport ID (e.g., SIA or NMIA), direction (Arrival or Departure), travel date (YYYYMMDD), flight ID. present the information in a clear and structured format using markdown."
+CRITICAL: Always review ALL previous messages first - if user provided flight details in any earlier message, use that information without asking again.
 
+FIRST: Parse current AND all previous messages for flight details:
+- Airport: "SIA", "Club Mobay", "Sangster" → SIA | "NMIA", "Club Kingston", "Norman Manley" → NMIA
+- Flight number: Look for airline codes + numbers (AF2859, AA123, etc.)
+- Date: Any date format (20 august 2025, 2025-08-20, etc.)
+- Passengers: Look for "adult", "children", passenger counts
 
-failure_instruction_prompt = PromptTemplate.from_template(
-"""You're an AI assistant helping a user with a booking process.
+If ALL required info is provided in current or previous messages, confirm immediately:
+```markdown
+## Perfect! Let me confirm your flight details:
 
-The step **"{step}"** failed due to an error while calling an external service or API.
+✓ **Airport:** [Airport Name] ([Code])
+✓ **Flight:** [Airline] [Flight Number]  
+✓ **Date:** [Formatted Date]
+✓ **Passengers:** [X] adult(s), [Y] children
 
-## ⚠️ Error Details
-{error}
+Everything looks good! Ready to proceed?
+```
 
-## Your Options:
-1. **🔄 Retry** - Try the same step again
-2. **❌ Exit** - Cancel the booking process
+If SOME info provided in previous messages, acknowledge what you have and ask ONLY for missing:
+```markdown
+## Great! I have some of your details already:
 
-Please let me know how you'd like to proceed. I'm here to help!
+✓ **Airport:** [if provided]
+✓ **Flight:** [if provided]
+✓ **Date:** [if provided]
+✓ **Passengers:** [if provided]
 
-*Keep the tone helpful and professional. Format the response using proper markdown with headers, bullet points, and emphasis.*"""
-)
+I still need:
+- [List ONLY missing items conversationally]
 
-cart_summary_instruction_prompt = PromptTemplate.from_template(
-    """You are a helpful AI assistant guiding a user through a booking process.
-## 🛒 Your Cart Summary
+What additional information can you share?
+```
 
-{cart}
+ONLY if NO flight info provided in any message, use full collection format:
+```markdown
+## Perfect! Let me get your flight details
 
-### 📋 Booking Details:
-Please review your selection:
-- **Product Type:** [Product details]
-- **Number of Passengers:** [Count]
-- **Total Amount:** [Amount if available]
+I'll need a few quick details to find your flight:
 
-### What's Next?
-Would you like to:
-1. **➕ Add Another Product** - Book additional services
-2. **💳 Proceed to Checkout** - Complete your booking
+**Which lounge would you like to book?**
 
-Please let me know your preference!
+1. **Club Kingston** (Norman Manley International - NMIA)
+2. **Club Mobay** (Sangster International - SIA)
 
-*Always format responses using proper markdown with headers, bullet points, emojis, and emphasis for better readability. if the users shares intent to add another product then direct them to "direction" and make the human_input false*
+**Also need:**
+1. Flight number
+2. Travel date (YYYY-MM-DD format works best)  
+3. How many passengers? (adults and children)
 
+What information do you have for me?
+```
+
+human_input=false when all info complete from any message, true only when missing required details not provided previously.
 """
-)
 
+# Contact Collection
 contact_instruction = """
-##  Contact Information Required
+Script: Collect contact info warmly, but first check if contact details were already provided in previous messages.
 
-ask user for their contact details to proceed with the booking.
-and share what you need from them.
+```markdown
+## Almost there! Just need contact details
 
-**Required Information:**
-- **First Name**
-- **Last Name** 
-- **Email Address**
-- **Phone Number**
+To complete your booking, I'll need contact information for each passenger:
 
-If any information is missing, please use a bulleted list to show what's needed and format your response with proper markdown.
+**For each person:**
+1. Title (Mr., Mrs., Ms., Dr., etc.)
+2. First & Last Name
+3. Email address  
+4. Phone number
+
+You can share these however is easiest for you!
+```
+
+If contact details were already provided, acknowledge and proceed directly to confirmation.
+
+human_input=true until all contact info complete and valid. Keep tone friendly and helpful.
 """
 
-cart_instruction = """
-## 🛒 Current Cart Status
+# Cart Summary
+cart_summary_instruction_prompt = PromptTemplate.from_template(
+"""Script: Show cart and next options warmly. Format cart data in user-friendly way.
 
-Show the current products added to the cart using markdown formatting:
+IMPORTANT: If user already indicated their preference for next steps in previous messages (add another product vs checkout), acknowledge that preference without asking again.
 
-### Your Items:
-[Display cart contents here]
+Use EXACT format:
+```markdown
+## Excellent! Your booking is all set
 
-### Next Steps:
-Would you like to:
-- **Add more products** to your cart
-- **Proceed to payment** and complete your booking
+**Here's what's in your cart:**
+1. Arrival Lounge Access for 1 passenger - $50
 
-Please format your response with proper headings, bullet points, and emphasis.
+[Format cart items as readable text, not raw data objects]
+
+---
+
+**What would you like to do next?**
+
+You have two great options:
+
+1. **Add Another Product** - Book more lounge access for different dates or locations
+2. **Proceed to Checkout** - Complete your purchase and get confirmation
+
+Which sounds good to you?
+```
+
+IMPORTANT: Convert cart data {cart} to readable format:
+- If product="ARRIVALONLY": show "Arrival Lounge Access"
+- If product="DEPARTURELOUNGE": show "Departure Lounge Access"  
+- If product="ARRIVALBUNDLE": show "Arrival & Departure Package"
+- Show passenger count and amount in friendly format
+- Never display raw object data like [{{'product': 'ARRIVALONLY'...}}]
+
+If user already indicated choice in previous messages, proceed directly.
+If add another: direction="direction", human_input=false
+If checkout: direction="payment", human_input=false
+If unclear: human_input=true, ask "Would you like option 1 or 2?"
+"""
+)
+
+# Error Handling
+failure_instruction_prompt = PromptTemplate.from_template(
+"""Something went wrong with "{step}": {error}
+
+What would you like to do?
+1. Try again - Sometimes these things just need a retry
+2. Cancel - Exit the booking process
+
+What sounds better to you?
+"""
+)
+
+# Summarization
+summarize_response = """
+Create summary of all the previous messages and mark the product COMPLETED and IN CART, summarize in this way - product-type, price. User at decision point: add product or checkout. 
+
+IMPORTANT: Include all user-provided details from the conversation history (flight info, dates, passenger counts, preferences) in the summary so the system remembers them for future interactions. New product selection should acknowledge existing details before asking for anything new.
+
+The summary will be used as a system message to maintain context.
 """
 
-summarize_response = "summarize all the user and ai messages and summarize the events into a single system message so that it can be used as minimal context history. note - the the product mentioned in the summary should be marked booked and the next step is cart summary so user can either choose another product example - arrival , departure , or bundle[arrival and departure] or proceed to checkout."
-
+# Mapping
 inst_map = {
-constants.DIRECTION: direction_instruction,
-constants.PRODUCT_TYPE: product_type_instruction ,
-constants.SCHEDULE_INFO: schedule_instruction ,
-constants.CONTACT_INFO:contact_instruction , 
-constants.CART: cart_summary_instruction_prompt,
-"summarize": summarize_response
+    constants.DIRECTION: direction_instruction,
+    constants.PRODUCT_TYPE: product_type_instruction,
+    constants.SCHEDULE_INFO: schedule_instruction,
+    constants.CONTACT_INFO: contact_instruction, 
+    constants.CART: cart_summary_instruction_prompt,
+    "summarize": summarize_response
 }

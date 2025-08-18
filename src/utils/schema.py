@@ -276,7 +276,7 @@ contact_schema = {
                 },
                 "phone": {
                     "type": "string",
-                    "description": "Phone number with country code (e.g., +919999999999)"
+                    "description": "Phone number (e.g., 9999999999)"
                 },
             },
             "required": ["firstName", "lastName", "email", "phone"]
@@ -315,8 +315,8 @@ def generate_contact_schema(adult_count: int, child_count: int):
                         },
                         "dob": {
                             "type": "string",
-                            "description": "Date of birth in YYYYMMDD (required)",
-                            "pattern": "^[0-9]{8}$"
+                            "description": "Date of birth in YYYYMMDD , empty "" if not provided",
+                            "pattern": "^[0-9]{8}$",
                         }
                     },
                     "required": ["title", "firstName", "lastName", "email"]
@@ -399,7 +399,7 @@ def generate_contact_schema(adult_count: int, child_count: int):
                             },
                             "phone": {
                                 "type": "string",
-                                "description": "Phone number with country code (e.g., +919999999999)"
+                                "description": "Phone number"
                             }
                         },
                         "required": ["title", "firstName", "lastName", "email", "phone"]

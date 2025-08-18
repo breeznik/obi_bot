@@ -49,7 +49,10 @@ async def chat(request: ChatRequest):
             checkpoint_id=request.checkpoint_id,
         )
         content = await asyncio.wait_for(controller.run(), timeout=120)
-        last_msg = content.get("messages", [])[-1]
+        
+        # Get messages list safely
+        messages = content.get("messages", [])
+        last_msg = messages[-1] if messages else None
         
         # Step 1: Check for interrupt
         interrupt = content.get("__interrupt__", [])
@@ -58,8 +61,7 @@ async def chat(request: ChatRequest):
 
         # Step 2: Fallback to last message content
         else:
-            messages = content.get("messages", [])
-            if messages:
+            if messages and last_msg:
                 if hasattr(last_msg, "content"):
                     reply = last_msg.content
                 elif isinstance(last_msg, dict):
