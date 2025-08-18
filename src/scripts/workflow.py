@@ -67,7 +67,8 @@ async def classifier(state:State , config):
             extracted_data = result.get("extracted_data", {})
             return {
             "current_step": constants.PRODUCT_TYPE,
-            "data":{ **state.get("data", {}) ,  "sessionId": sessionId, "extracted_data": extracted_data}         
+            "data":{ **state.get("data", {}) ,  "sessionId": sessionId, "extracted_data": extracted_data} , 
+            "client_events": []         
             }
         else:            
             return {
@@ -79,7 +80,9 @@ async def classifier(state:State , config):
                     "payload": {"bookingId": "abc123"}
                 },
                 
-            ])] , "data":{ **state.get("data", {}) ,  "sessionId": sessionId}
+            ])] , "data":{ **state.get("data", {}) ,  "sessionId": sessionId , 
+                "client_events": []
+                          } 
             }
             
     except Exception as e:
@@ -87,7 +90,8 @@ async def classifier(state:State , config):
         return {
             "current_step": END,
             "messages": state["messages"]  + [AIMessage(content="There was some error while processing your request , please retry." )],
-            "data":{ **state.get("data", {}) ,  "sessionId": sessionId}
+            "data":{ **state.get("data", {}) ,  "sessionId": sessionId} ,
+            "client_events": []
         }
 
 def info_collector(state:State):
@@ -495,22 +499,33 @@ def show_cart(state: State):
         return {
             "messages": state["messages"]  + [AIMessage(content=response["message"] )],
             "current_step": END,
+            "client_events": []
+            
         }
     elif direction == "direction":
         return {
             "messages": state["messages"]  + [AIMessage(content=response["message"] )],
             "current_step": constants.PRODUCT_TYPE,
+            "client_events": []
+            
         }
     elif direction == "payment":
         return {
             "messages": state["messages"]  + [AIMessage(content=response["message"] )],
-            "current_step": constants.PAYMENT,
+            "current_step": END , 
+            "client_events": [{
+                    "type": "client_event",
+                    "event": "navigate_to_summary",
+                    "payload": {}
+            }]
         }
 
     # Default fallback
     return {
         "messages": state["messages"]  + [AIMessage(content="Cart processed, but no clear next step. Please continue.")],
         "current_step": current_step,
+        "client_events": []
+        
     }
 
 async def payment(state: State , config):
