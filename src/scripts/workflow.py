@@ -73,16 +73,9 @@ async def classifier(state:State , config):
         else:            
             return {
                 "current_step": END ,
-                "messages": state["messages"]  + [AIMessage(content= result.get("message" , "") , client_events=[
-                {
-                    "type": "client_event",
-                    "event": "redirect_to_summary",
-                    "payload": {"bookingId": "abc123"}
-                },
-                
-            ])] , "data":{ **state.get("data", {}) ,  "sessionId": sessionId , 
+                "messages": state["messages"]  + [AIMessage(content= result.get("message" , "") )] , 
+                "data":{**state.get("data", {}) ,  "sessionId": sessionId} , 
                 "client_events": []
-                          } 
             }
             
     except Exception as e:
@@ -149,28 +142,53 @@ def router_next(state:State):
 def failure_handler(state:State):
     print("Failure handler triggered")
     current_step = state["current_step"]
-    prompt = failure_instruction_prompt.format(step=state["current_step"] , error="network error")
+    error = state["data"][current_step].get("statusMessage" , "Unknown error occurred")
+    prompt = failure_instruction_prompt.format(step=state["current_step"] , error=error)
     sm = SystemMessage(content=prompt)
     structuredllm = llm.with_structured_output(schema_map[constants.FAILURE_HANDLER])
     response = structuredllm.invoke([sm] + state["messages"])
     print(f"Failure handler response: {response}")    
     if response["end"]:
         return {
-            "messages": state["messages"]  + [AIMessage(content=response["message"])] , 
+            "messages": [AIMessage(content=response["message"])] , 
             "current_step":constants.DIRECTION,
             "failure_step": False
+        }
+    if response["isStandby"]:
+        return {
+            "current_step": END,
+            "messages": [AIMessage(content=response["message"] , client_events=[{
+                    "type": "client_event",
+                    "event": "redirect_to_standby",
+                    "payload": {"product_type": state["data"].get("product_type" , "")}
+                }])], 
+            "failure_step": False,
+            "client_events":[{
+                    "type": "client_event",
+                    "event": "redirect_to_standby",
+                    "payload": {"product_type": state["data"].get("product_type" , "")}
+                }]
         }
     if response["human_input"]:
         print(f"Triggering interrupt: {response['message']}")
         user_input = interrupt(value=response["message"])
         return {
             "messages":state["messages"]  + [HumanMessage(content=user_input)],
-            "executionFlow": state.get("executionFlow", []) + [f"{current_step} {constants.FAILURE_HANDLER} retry"] 
+            "executionFlow": state.get("executionFlow", []) + [f"{current_step} {constants.FAILURE_HANDLER} retry"],
+            "failure_step": False  # Clear failure step to avoid infinite loop
         }
     else:
+        data = state["data"]
+        if current_step == constants.RESERVATION: 
+            data[failuer_serializer[current_step]] = {}
+            data["schedule"] = {}
+        else:
+            data[failuer_serializer[current_step]] = {}
+            
         return {
             "current_step": failuer_serializer[current_step],
-            "messages": state["messages"]  + [AIMessage(content=response["message"])] , 
+            "messages": [state["messages"][-1]] + [AIMessage(content=response["message"])] ,
+            "data": data, 
             "failure_step": False
         }
        
@@ -349,7 +367,12 @@ async def reservation(state: State , config):
         print(f"Reservation result: {reservation_result}")
 
         data["reservation"] = json.loads(reservation_result)
-        if data["reservation"].get("cartitemid"):
+        if data["reservation"]["isStandBy"]:
+            return {
+            "data":data,
+            "failure_step": True
+            }
+        elif data["reservation"]["data"].get("cartitemid"):
             # Proceed to next step
             return {
                 "data": data,
@@ -357,7 +380,7 @@ async def reservation(state: State , config):
             }
         else:
             return {
-            **state,
+            "data":data,
             "failure_step": True
             }
     except Exception as e:
@@ -709,7 +732,7 @@ graph.add_conditional_edges(constants.CONTACT_INFO , router_next , [constants.CO
 graph.add_conditional_edges(constants.CONTACT , router_next , [constants.FAILURE_HANDLER , END , constants.CART])
 graph.add_conditional_edges(constants.CART , router_next , [constants.PRODUCT_TYPE , END , constants.CART, constants.PAYMENT, constants.FAILURE_HANDLER])
 graph.add_conditional_edges(constants.PAYMENT , router_next , [END, constants.FAILURE_HANDLER])
-graph.add_conditional_edges(constants.FAILURE_HANDLER , router_next , [END , constants.CONTACT , constants.SCHEDULE , constants.RESERVATION, constants.SCHEDULE_INFO, constants.CONTACT_INFO])
+graph.add_conditional_edges(constants.FAILURE_HANDLER , router_next , [END , constants.CONTACT , constants.SCHEDULE , constants.RESERVATION, constants.SCHEDULE_INFO, constants.CONTACT_INFO , constants.DIRECTION, constants.FAILURE_HANDLER])
 
 
 compiled_graph = graph.compile(memory)

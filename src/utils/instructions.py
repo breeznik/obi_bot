@@ -329,8 +329,11 @@ If unclear: human_input=true, ask "Would you like option 1 or 2?"
 failure_instruction_prompt = PromptTemplate.from_template(
 """Something went wrong with "{step}": {error}
 
+if step is reservation and the error is for standy by then provide user to either procceed to standby or try another schedule.
+don't forget to include the options below.
+
 What would you like to do?
-1. Try again - Sometimes these things just need a retry
+1. Try again - ["apropriate message here"]
 2. Cancel - Exit the booking process
 
 What sounds better to you?
