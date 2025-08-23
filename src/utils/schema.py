@@ -234,7 +234,7 @@ cart_summary_schema = {
         "direction": {
             "type": "string",
             "enum": ["direction", "end" , "null", "payment"],
-            "description": "deafult - null , if user deciede to add another product then it will be direction , if user want to end the booking then it will be end , if user wants to proceed to payment then it will be payment"
+            "description": "deafult - null , if user deciede to add another product then it will be direction , if user want to end the booking then it will be end, if user wants to proceed to payment or go to summary then it will be payment"
         },
         "human_input": {
             "type": "boolean",

@@ -67,8 +67,19 @@ Map: arrival→ARRIVALONLY, departure→DEPARTURELOUNGE, both→ARRIVALBUNDLE
 human_input=false when type is clear from any message, true only if unclear and need user choice.
 """
 
-# Schedule Collection
-schedule_instruction = """
+# Schedule Collection Functions
+def get_schedule_instruction(product_type):
+    """
+    Returns appropriate schedule instruction based on product type.
+    
+    Args:
+        product_type (str): Either 'ARRIVALBUNDLE' for bundle bookings or single booking types
+    
+    Returns:
+        str: The appropriate instruction string
+    """
+    
+    base_parsing = """
 Script: Extract and confirm flight details from current and previous messages. Only ask for information that hasn't been provided before.
 
 CRITICAL: Always review ALL previous messages first - if user provided flight details in any earlier message, use that information without asking again.
@@ -78,6 +89,104 @@ FIRST: Parse current AND all previous messages for flight details:
 - Flight number: Look for airline codes + numbers (AF2859, AA123, etc.)
 - Date: Any date format (20 august 2025, 2025-08-20, etc.)
 - Passengers: Look for "adult", "children", passenger counts
+"""
+
+    if product_type == 'ARRIVALBUNDLE':
+        return base_parsing + """
+FOR BUNDLE BOOKINGS (Arrival & Departure Package):
+
+CRITICAL PARSING RULES FOR FLIGHT ASSIGNMENT:
+1. When user provides multiple flights, assign based on CHRONOLOGICAL ORDER (earlier date = arrival, later date = departure)
+2. When only one flight provided in response to "arrival details" request = ARRIVAL FLIGHT
+3. When only one flight provided in response to "departure details" request = DEPARTURE FLIGHT  
+4. Look for explicit keywords: "arriving", "landing", "inbound" = arrival | "departing", "leaving", "outbound" = departure
+5. If user says "first flight" or "coming in" = arrival | "return flight" or "going home" = departure
+
+STEP-BY-STEP COLLECTION LOGIC:
+1. If NO arrival info exists, ask for arrival details ONLY
+2. If arrival info complete but NO departure info, ask for departure details ONLY  
+3. If BOTH complete, confirm everything
+
+If ALL required info for BOTH arrival and departure is provided in current or previous messages, confirm immediately:
+```markdown
+## Perfect! Let me confirm your flight details:
+
+**Arrival Flight:**
+✓ **Airport:** [Airport Name] ([Code])
+✓ **Flight:** [Airline] [Flight Number]  
+✓ **Date:** [Formatted Date]
+
+**Departure Flight:**
+✓ **Airport:** [Airport Name] ([Code])
+✓ **Flight:** [Airline] [Flight Number]  
+✓ **Date:** [Formatted Date]
+
+✓ **Passengers:** [X] adult(s), [Y] children
+
+Everything looks good! Ready to proceed?
+```
+
+If ONLY arrival info is missing or incomplete:
+```markdown
+## Let's start with your arrival flight details:
+
+I need your **ARRIVAL** flight information (when you're coming IN to Jamaica):
+
+**Which airport will you be arriving at?**
+- Club Kingston (NMIA)
+- Club Mobay (SIA)
+
+**Also need:**
+- Flight number  
+- Arrival date
+
+What are your **ARRIVAL** flight details?
+```
+
+If arrival info is complete but departure info is missing:
+```markdown
+## Great! Now I need your departure flight details:
+
+**Your arrival is all set:**
+✓ [Airport] - [Flight] on [Date]
+
+**Now for your **DEPARTURE** flight (when you're leaving Jamaica):**
+
+**Which airport will you be departing from?**
+- Club Kingston (NMIA)
+- Club Mobay (SIA)
+
+**Also need:**
+- Flight number
+- Departure date
+
+What are your **DEPARTURE** flight details?
+```
+
+If both flights have some info but missing passenger count:
+```markdown
+## Almost there! Just need passenger information:
+
+**Arrival Flight:** ✓ Complete
+**Departure Flight:** ✓ Complete
+
+How many passengers will be traveling?
+- Adults: 
+- Children:
+```
+
+CRITICAL: When parsing user responses:
+- If you just asked for ARRIVAL details, assign the provided flight info to ARRIVAL
+- If you just asked for DEPARTURE details, assign the provided flight info to DEPARTURE
+- If multiple flights provided simultaneously, use date order (earlier = arrival, later = departure)
+- NEVER swap arrival and departure assignments once made
+
+human_input=false when all info complete from any message, true only when missing required details not provided previously.
+"""
+    
+    else:  # Single bookings (ARRIVALONLY, DEPARTURELOUNGE)
+        return base_parsing + """
+FOR SINGLE BOOKINGS (Arrival Only or Departure Only):
 
 If ALL required info is provided in current or previous messages, confirm immediately:
 ```markdown
@@ -102,8 +211,6 @@ If SOME info provided in previous messages, acknowledge what you have and ask ON
 
 I still need:
 - [List ONLY missing items conversationally]
-
-What additional information can you share?
 ```
 
 ONLY if NO flight info provided in any message, use full collection format:
@@ -113,7 +220,6 @@ ONLY if NO flight info provided in any message, use full collection format:
 I'll need a few quick details to find your flight:
 
 **Which lounge would you like to book?**
-
 1. **Club Kingston** (Norman Manley International - NMIA)
 2. **Club Mobay** (Sangster International - SIA)
 
@@ -122,7 +228,6 @@ I'll need a few quick details to find your flight:
 2. Travel date (YYYY-MM-DD format works best)  
 3. How many passengers? (adults and children)
 
-What information do you have for me?
 ```
 
 human_input=false when all info complete from any message, true only when missing required details not provided previously.
@@ -132,6 +237,36 @@ human_input=false when all info complete from any message, true only when missin
 contact_instruction = """
 Script: Collect contact info warmly, but first check if contact details were already provided in previous messages.
 
+CRITICAL: Always review ALL previous messages first - if user provided contact details in any earlier message, use that information without asking again.
+
+FIRST: Parse current AND all previous messages for contact details:
+- Names (first, last, titles)
+- Email addresses
+- Phone numbers
+- Any passenger-specific contact info
+
+If ALL contact details are complete from current or previous messages, confirm immediately:
+```markdown
+## Perfect! I have all your contact information
+
+✓ **Contact details:** Complete for all passengers
+
+Everything looks good! Ready to proceed to payment?
+```
+
+If SOME contact info provided in previous messages, acknowledge what you have and ask ONLY for missing:
+```markdown
+## Great! I have some contact details already:
+
+✓ **Completed:** [List what contact info you already have]
+
+I still need:
+- [List ONLY missing contact information conversationally]
+
+You can share these however is easiest for you!
+```
+
+ONLY if NO contact info provided in any message, use full collection format:
 ```markdown
 ## Almost there! Just need contact details
 
@@ -146,16 +281,14 @@ To complete your booking, I'll need contact information for each passenger:
 You can share these however is easiest for you!
 ```
 
-If contact details were already provided, acknowledge and proceed directly to confirmation.
-
-human_input=true until all contact info complete and valid. Keep tone friendly and helpful.
+human_input=false when all contact info complete from any message, true only when missing required details not provided previously.
 """
 
 # Cart Summary
 cart_summary_instruction_prompt = PromptTemplate.from_template(
 """Script: Show cart and next options warmly. Format cart data in user-friendly way.
 
-IMPORTANT: If user already indicated their preference for next steps in previous messages (add another product vs checkout), acknowledge that preference without asking again.
+IMPORTANT: If user already indicated their preference for next steps in previous messages (add another product vs procced to Cart summary), acknowledge that preference without asking again.
 
 Use EXACT format:
 ```markdown
@@ -173,7 +306,7 @@ Use EXACT format:
 You have two great options:
 
 1. **Add Another Product** - Book more lounge access for different dates or locations
-2. **Proceed to Checkout** - Complete your purchase and get confirmation
+2. **Go to Cart Summary** - Review your selections and complete your purchase
 
 Which sounds good to you?
 ```
@@ -187,7 +320,7 @@ IMPORTANT: Convert cart data {cart} to readable format:
 
 If user already indicated choice in previous messages, proceed directly.
 If add another: direction="direction", human_input=false
-If checkout: direction="payment", human_input=false
+If checkout or summarize: direction="payment", human_input=false
 If unclear: human_input=true, ask "Would you like option 1 or 2?"
 """
 )
@@ -217,7 +350,7 @@ The summary will be used as a system message to maintain context.
 inst_map = {
     constants.DIRECTION: direction_instruction,
     constants.PRODUCT_TYPE: product_type_instruction,
-    constants.SCHEDULE_INFO: schedule_instruction,
+    constants.SCHEDULE_INFO: get_schedule_instruction,
     constants.CONTACT_INFO: contact_instruction, 
     constants.CART: cart_summary_instruction_prompt,
     "summarize": summarize_response

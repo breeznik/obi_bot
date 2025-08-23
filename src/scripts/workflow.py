@@ -100,11 +100,13 @@ def info_collector(state:State):
     
     sm = ""
     if current_step in {constants.PRODUCT_TYPE, constants.SCHEDULE_INFO , constants.CONTACT_INFO}:
-        sm = SystemMessage(content=inst_map[current_step])
+        sm = SystemMessage(content=f"{inst_map[current_step]}")
         schema = schema_map[current_step]
         if(current_step == constants.SCHEDULE_INFO):
             schema = schema_map[current_step](state["data"]["product_type"])
             structured_llm = llm.with_structured_output(schema)
+            sm = SystemMessage(content=inst_map[current_step](state["data"]["product_type"]))
+            
         elif current_step == constants.CONTACT_INFO:
             schema = schema_map[current_step](adult_count=state["data"]["schedule_info"]["pessanger_count"]["adult"] , child_count=state["data"]["schedule_info"]["pessanger_count"]["children"])
             structured_llm = llm.with_structured_output(schema)
@@ -249,7 +251,7 @@ async def schedule(state: State , config):
             "direction": scheduleData.get("departure", {}).get("direction"),
             "traveldate": scheduleData.get("departure", {}).get("traveldate"),
             "flightId": scheduleData.get("departure", {}).get("flightId"),
-            "sessionid": sessionId  # TODO: extract to config
+            "sessionid": sessionId  
         }
 
         print(f"Arrival payload: {arrivalObj}")
