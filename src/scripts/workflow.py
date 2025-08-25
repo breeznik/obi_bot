@@ -183,7 +183,7 @@ def failure_handler(state:State):
             data[failuer_serializer[current_step]] = {}
             data["schedule"] = {}
         else:
-            data[failuer_serializer[current_step]] = {}
+            data[failuer_serializer[current_step]] = {**state["data"].get("cart", {})}
             
         return {
             "current_step": failuer_serializer[current_step],
@@ -393,30 +393,31 @@ async def reservation(state: State , config):
         }
         
 async def contact(state: State , config):
-    sessionId = config["metadata"]["thread_id"]
-    mcp_client = await get_mcpInstance()
-    current_step = state["current_step"]
-    print("Executing contact step")
-
-    # Parse reservation JSON string to dict
-    reservation = state["data"]["reservation"]
-
-    # Access first adult's contact info
-    contact_info = state["data"]["contact_info"]["contact"]
-    
-    contact_payload = {
-        "cartitemid": reservation["cartitemid"],
-        "email": contact_info["email"],
-        "firstname": contact_info["firstName"],
-        "lastname": contact_info["lastName"],
-        "phone": contact_info["phone"],  # fallback from main contact
-        "title": contact_info.get("title" , "MR"),
-        "sessionid":sessionId
-    }
-
-    print(f"Contact payload: {contact_payload}")
 
     try:
+        sessionId = config["metadata"]["thread_id"]
+        mcp_client = await get_mcpInstance()
+        current_step = state["current_step"]
+        print("Executing contact step")
+
+        # Parse reservation JSON string to dict
+        reservation = state["data"]["reservation"]
+
+        # Access first adult's contact info
+        contact_info = state["data"]["contact_info"]["contact"]
+        
+        contact_payload = {
+            "cartitemid": reservation["cartitemid"],
+            "email": contact_info["email"],
+            "firstname": contact_info["firstName"],
+            "lastname": contact_info["lastName"],
+            "phone": contact_info["phone"],  # fallback from main contact
+            "title": contact_info.get("title" , "MR"),
+            "sessionid":sessionId
+        }
+
+        print(f"Contact payload: {contact_payload}")
+
         contact_response = await mcp_client.invoke_tool("contact", contact_payload)
         print(f"Contact response: {contact_response}")
         cart = state["data"].get("cart", {})
