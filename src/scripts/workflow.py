@@ -180,8 +180,8 @@ def failure_handler(state:State):
     else:
         data = state["data"]
         if current_step == constants.RESERVATION: 
-            data[failuer_serializer[current_step]] = {}
-            data["schedule"] = {}
+            data[constants.SCHEDULE_INFO] = {}
+            data[constants.SCHEDULE] = {}
         else:
             data[failuer_serializer[current_step]] = {**state["data"].get("cart", {})}
             
