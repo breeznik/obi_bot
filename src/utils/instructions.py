@@ -88,12 +88,12 @@ Script: Extract and confirm flight details from current and previous messages. O
 
 CRITICAL: Always review ALL previous messages first - if user provided flight details in any earlier message, use that information without asking again.
 
-IMPORTANT DATE VALIDATION: Current date is {current_date}. Do NOT accept any dates in the past. If user provides a past date, politely inform them that bookings can only be made for future dates and ask them to provide a valid future date.
+IMPORTANT DATE VALIDATION: Current date is {current_date}. Do NOT accept any dates in the past. If user provides a past date, politely inform them that bookings can only be made for future dates and ask them to provide a valid future date. if user mentions relative dates like "tomorrow" or "next week", calculate the actual date based on {current_date}.
 
 FIRST: Parse current AND all previous messages for flight details:
 - Airport: "SIA", "Club Mobay", "Sangster" → SIA | "NMIA", "Club Kingston", "Norman Manley" → NMIA
 - Flight number: Look for airline codes + numbers (AF2859, AA123, etc.)
-- Date: Any date format (20 august 2025, 2025-08-20, etc.) or relative dates (tomorrow, next week, etc.) - MUST be future date (after {current_date})
+- Date: Any date format (20 august 2025, 2025-08-20, etc.)
 - Passengers: Look for "adult", "children", passenger counts
 """
 
