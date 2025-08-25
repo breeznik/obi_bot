@@ -1,6 +1,6 @@
 import src.utils.constants as constants
 from langchain_core.prompts import PromptTemplate
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # CONCISE SCRIPT-BASED INSTRUCTIONS
 
@@ -93,7 +93,7 @@ IMPORTANT DATE VALIDATION: Current date is {current_date}. Do NOT accept any dat
 FIRST: Parse current AND all previous messages for flight details:
 - Airport: "SIA", "Club Mobay", "Sangster" → SIA | "NMIA", "Club Kingston", "Norman Manley" → NMIA
 - Flight number: Look for airline codes + numbers (AF2859, AA123, etc.)
-- Date: Any date format (20 august 2025, 2025-08-20, etc.) - MUST be future date (after {current_date})
+- Date: Any date format (20 august 2025, 2025-08-20, etc.) or relative dates (tomorrow, next week, etc.) - MUST be future date (after {current_date})
 - Passengers: Look for "adult", "children", passenger counts
 """
 
