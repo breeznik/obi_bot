@@ -1,5 +1,6 @@
 import src.utils.constants as constants
 from langchain_core.prompts import PromptTemplate
+from datetime import datetime
 
 # CONCISE SCRIPT-BASED INSTRUCTIONS
 
@@ -79,15 +80,20 @@ def get_schedule_instruction(product_type):
         str: The appropriate instruction string
     """
     
-    base_parsing = """
+    # Get current date dynamically
+    current_date = datetime.now().strftime("%B %d, %Y")
+    
+    base_parsing = f"""
 Script: Extract and confirm flight details from current and previous messages. Only ask for information that hasn't been provided before.
 
 CRITICAL: Always review ALL previous messages first - if user provided flight details in any earlier message, use that information without asking again.
 
+IMPORTANT DATE VALIDATION: Current date is {current_date}. Do NOT accept any dates in the past. If user provides a past date, politely inform them that bookings can only be made for future dates and ask them to provide a valid future date.
+
 FIRST: Parse current AND all previous messages for flight details:
 - Airport: "SIA", "Club Mobay", "Sangster" → SIA | "NMIA", "Club Kingston", "Norman Manley" → NMIA
 - Flight number: Look for airline codes + numbers (AF2859, AA123, etc.)
-- Date: Any date format (20 august 2025, 2025-08-20, etc.)
+- Date: Any date format (20 august 2025, 2025-08-20, etc.) - MUST be future date (after {current_date})
 - Passengers: Look for "adult", "children", passenger counts
 """
 
@@ -329,11 +335,12 @@ If unclear: human_input=true, ask "Would you like option 1 or 2?"
 failure_instruction_prompt = PromptTemplate.from_template(
 """Something went wrong with "{step}": {error}
 
-if step is reservation and the error is for standy by then provide user to either procceed to standby or try another schedule.
+if step is reservation and the error is for standy by then provide user to either procceed to standby or end it.
+
 don't forget to include the options below.
 
 What would you like to do?
-1. Try again - ["apropriate message here"]
+1. ["apropriate message here"]
 2. Cancel - Exit the booking process
 
 What sounds better to you?

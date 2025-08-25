@@ -142,7 +142,7 @@ def router_next(state:State):
 def failure_handler(state:State):
     print("Failure handler triggered")
     current_step = state["current_step"]
-    error = state["data"][current_step].get("statusMessage" , "Unknown error occurred")
+    error = state["data"].get(current_step , "Unknown error occurred").get("statusMessage" , "Unknown error occurred")
     prompt = failure_instruction_prompt.format(step=state["current_step"] , error=error)
     sm = SystemMessage(content=prompt)
     structuredllm = llm.with_structured_output(schema_map[constants.FAILURE_HANDLER])
@@ -152,7 +152,8 @@ def failure_handler(state:State):
         return {
             "messages": [AIMessage(content=response["message"])] , 
             "current_step":constants.DIRECTION,
-            "failure_step": False
+            "failure_step": False ,
+            "data": {**(state["data"].get("cart" , {})) , "sessionId": state["data"].get("sessionId" , "")} ,
         }
     if response["isStandby"]:
         return {
@@ -175,15 +176,14 @@ def failure_handler(state:State):
         return {
             "messages":state["messages"]  + [HumanMessage(content=user_input)],
             "executionFlow": state.get("executionFlow", []) + [f"{current_step} {constants.FAILURE_HANDLER} retry"],
-            "failure_step": False  # Clear failure step to avoid infinite loop
         }
     else:
         data = state["data"]
-        if current_step == constants.RESERVATION: 
+        if current_step == constants.RESERVATION | current_step == constants.SCHEDULE: 
             data[constants.SCHEDULE_INFO] = {}
             data[constants.SCHEDULE] = {}
         else:
-            data[failuer_serializer[current_step]] = {**state["data"].get("cart", {})}
+            data = {**(state["data"].get("cart", {}))}
             
         return {
             "current_step": failuer_serializer[current_step],
