@@ -187,9 +187,9 @@ def failure_handler(state:State):
             
         return {
             "current_step": failuer_serializer[current_step],
-            "messages": [state["messages"][-1]] + [AIMessage(content=response["message"])] ,
+            "messages": [AIMessage(content=response["message"])] ,
             "data": data, 
-            "failure_step": False
+            "failure_step": False,
         }
        
     
