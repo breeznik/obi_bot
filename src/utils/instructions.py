@@ -88,7 +88,16 @@ Script: Extract and confirm flight details from current and previous messages. O
 
 CRITICAL: Always review ALL previous messages first - if user provided flight details in any earlier message, use that information without asking again.
 
-IMPORTANT DATE VALIDATION: Current date is {current_date}. Do NOT accept any dates in the past. If user provides a past date, politely inform them that bookings can only be made for future dates and ask them to provide a valid future date. if user mentions relative dates like "tomorrow" or "next week", calculate the actual date based on {current_date}.
+IMPORTANT DATE VALIDATION: Current date is {current_date}. Do NOT accept any dates in the past. If user provides a past date, politely inform them that bookings can only be made for future dates and ask them to provide a valid future date.
+
+RELATIVE DATE CONVERSION: When users mention relative dates, convert them to actual dates:
+- "today" → Calculate: {current_date} (same day booking allowed)
+- "tomorrow" → Calculate: {current_date} + 1 day = [actual date]
+- "day after tomorrow" → Calculate: {current_date} + 2 days = [actual date]
+- "next week" → Calculate: {current_date} + 7 days = [actual date]
+- "next Monday/Tuesday/etc" → Calculate from {current_date} to next occurrence of that day
+- "in 3 days" or "in X days" → Calculate: {current_date} + X days = [actual date]
+- Always confirm with user: "I understand you mean [relative term] which is [actual calculated date]. Is that correct?"
 
 FIRST: Parse current AND all previous messages for flight details:
 - Airport: "SIA", "Club Mobay", "Sangster" → SIA | "NMIA", "Club Kingston", "Norman Manley" → NMIA
