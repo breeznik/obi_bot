@@ -66,23 +66,23 @@ failure_schema = {
     "properties": {
         "message": {
             "type": "string",
-            "description": "AI response to human , if standby is true then respond user 'redirecting to standby page'"
+            "description": "AI response to human. If standby is true, respond with 'redirecting to standby page'."
         },
         "human_input": {
             "type": "boolean",
-            "description": "True if human input is needed and false if not , should be false if standby is true or user have taken the dicision to end or retry the booking"
+            "description": "True if human input is needed; false if not. Should be false if standby is true, user has chosen to end/retry booking, or has chosen to try another schedule."
         },
         "end": {
             "type": "boolean",
-            "description": "True if user wants to exit the booking or end the flow"
+            "description": "True if user wants to exit the booking or end the flow."
         },
-        "isStandby":{
+        "isStandby": {
             "type": "boolean",
-            "deafult": False,
-            "description": "True if user wants to proceed with standby option after reservation failure , keep it false if not"
+            "default": False,
+            "description": "True if user wants to proceed with standby option after reservation failure; keep it false if not."
         }
     },
-    "required": ["message", "human_input", "end" , "isStandby"] 
+    "required": ["message", "human_input", "end", "isStandby"]
 }
 
 common_schema = {
