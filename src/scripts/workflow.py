@@ -49,9 +49,9 @@ flow_serializer = {
 }
 
 failuer_serializer = {
-    constants.SCHEDULE: constants.SCHEDULE_INFO , 
-    constants.CONTACT: constants.CONTACT_INFO,
-    constants.RESERVATION: constants.SCHEDULE_INFO
+    constants.SCHEDULE: constants.PRODUCT_TYPE , 
+    constants.CONTACT: constants.RESERVATION,
+    constants.RESERVATION: constants.PRODUCT_TYPE
 }
 
 # flow nodes
